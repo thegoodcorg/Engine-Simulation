@@ -41,7 +41,7 @@ while (running)
     testEngine.Update(dt);
 
     // \r returns to the start of the line so the display updates in place
-    Console.Write($"\rthrottle={testEngine.ThrottlePosition * 100,3:F0}%  rpm={testEngine.EngineSpeed,5:F0}   ");
+    Console.Write($"\rthrottle={testEngine.ThrottlePosition * 100,3:F0}%  rpm={testEngine.EngineSpeed,5:F0}  torque={testEngine.TorqueNm * testEngine.ThrottlePosition,3:F0} Nm   ");
 
     Thread.Sleep((int)(dt * 1000));
 }
