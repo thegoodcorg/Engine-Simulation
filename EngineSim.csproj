@@ -7,4 +7,11 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- The test project lives in a subfolder; keep its files out of this build -->
+  <ItemGroup>
+    <Compile Remove="EngineSim.Tests/**" />
+    <Content Remove="EngineSim.Tests/**" />
+    <None Remove="EngineSim.Tests/**" />
+  </ItemGroup>
+
 </Project>

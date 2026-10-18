@@ -1,7 +1,8 @@
 namespace EngineSim;
 
-// The answer to "may the engine start?": allowed or not, and why not
-public record StartCheckResult(bool Allowed, string Message);
+// The answer to "may the engine run?": allowed or not, plus a message to show.
+// Message is the reason when not allowed, a warning when allowed (e.g. low fuel), or null when all is well.
+public record RunCheckResult(bool Allowed, string? Message);
 
 // Every control decision lives here. The ECU holds NO references to other systems:
 // the Vehicle passes in the facts as parameters, and the ECU returns decisions.
@@ -12,6 +13,7 @@ public class EngineControlUnit
     private const double IdleWobbleIntervalS = 1.0;   // seconds between new random idle targets
     private const double IdleWobbleRate = 2.0;        // how quickly the floor drifts toward its target
     private const double RevLimiterRestoreGap = 150;  // spark returns this far below max RPM
+    private const double LowFuelPercentage = 5;       // low fuel warning below this % of the tank
 
     // Idle floor state
     private double _idleFloorRpm;
@@ -31,16 +33,18 @@ public class EngineControlUnit
         _idleTargetRpm = targetIdleRpm;
     }
 
-    // Start checks: each ticket adds one (#2 battery, #4 fuel)
-    public StartCheckResult CheckCanStart(bool batteryConnected, double fuelLevelL)
+    // Run checks: used at start AND every tick, so starting and stalling follow the same rules.
+    // Each ticket adds one (#2 battery, #4 fuel)
+    public RunCheckResult CheckCanRun(bool batteryConnected, double fuelLevelPercentage)
     {
         if (!batteryConnected)
-            return new StartCheckResult(false, "battery not connected");
+            return new RunCheckResult(false, "battery not connected");
+        if (fuelLevelPercentage <= 0)
+            return new RunCheckResult(false, "fuel tank empty");
+        if (fuelLevelPercentage < LowFuelPercentage)
+            return new RunCheckResult(true, "fuel level low");
 
-        if (fuelLevelL <= 0)
-            return new StartCheckResult(false, "fuel tank empty");
-
-        return new StartCheckResult(true, "engine started");
+        return new RunCheckResult(true, null);
     }
 
     // Status message for the display. The Vehicle passes in whether the engine is running.
@@ -49,18 +53,11 @@ public class EngineControlUnit
         return engineRunning ? "Engine running" : "Engine off";
     }
 
-    // Stall check (#4): no fuel, no running
-    public bool ShouldStall(double fuelLevelL)
-    {
-        return fuelLevelL <= 0;
-    }
 
     // Rev limiter (#6): cut spark at max RPM, restore it once RPM falls below max by the gap.
     // The gap stops spark flickering on and off every tick. Returns whether spark is allowed.
-    public bool UpdateRevLimiter(double rpm, double maxRpm, bool isBatteryConnected)
+    public bool UpdateRevLimiter(double rpm, double maxRpm)
     {
-        if (!isBatteryConnected) return false;
-
         if (rpm >= maxRpm)
             _limiterActive = true;
         else if (rpm < maxRpm - RevLimiterRestoreGap)

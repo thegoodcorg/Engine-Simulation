@@ -12,7 +12,7 @@ public class Vehicle
     private readonly Battery _battery;
     // private readonly Ignition _ignition;
 
-    private string? _diagnosticMessage; // why the last start was refused, or null
+    private string? _diagnosticMessage; // latest ECU message: a refusal, stall reason or warning, or null
     public Vehicle(double bore, double stroke, int cylinders, AmbientConditions ambientConditions)
     {
         // One shared AmbientConditions, handed to anything that needs the outside air
@@ -20,7 +20,7 @@ public class Vehicle
 
         _engine = new Engine(bore, stroke, cylinders, _ambientConditions);
         _ecu = new EngineControlUnit(_engine.TargetIdleRpm);
-        _fuelSystem = new FuelSystem(tankSizeL: 80);
+        _fuelSystem = new FuelSystem(80);
         _battery = new Battery();
         // _ignition = new Ignition();
     }
@@ -28,11 +28,18 @@ public class Vehicle
     // ---- Values for Program.cs to display (read-only) ----
     public double Rpm => _engine.EngineSpeed;
     public double ThrottlePosition => _engine.ThrottlePosition;
-    public double EngineTorqueNm => _engine.MaxTorqueNm;
     public double FuelLevelL => _fuelSystem.FuelLevelL;
     public bool IsRunning => _engine.IsRunning;
-    // A failed start's reason stays on screen until the next start attempt or battery switch
-    public string EngineStatus => _diagnosticMessage ?? _ecu.EngineStatus(_engine.IsRunning);
+    public bool OutOfFuel => _fuelSystem.FuelLevelL <= 0; // Program.cs ends the sim on this
+    // Engine state, plus the ECU's message when there is one, e.g. "Engine running: fuel level low"
+    public string EngineStatus
+    {
+        get
+        {
+            string status = _ecu.EngineStatus(_engine.IsRunning);
+            return _diagnosticMessage is null ? status : $"{status}: {_diagnosticMessage}";
+        }
+    }
     public double BatteryVoltage => _battery.IsBatteryConnected ? _battery.BatteryChargeV : 0;
     // public bool SparkOn => _ignition.SparkOn;
 
@@ -49,11 +56,17 @@ public class Vehicle
         double rpm = _engine.EngineSpeed;
         // 1 read current values fuel level, battery, etc
         // 2 pass things to the ecu and decide what to do
-        bool sparkOn = _ecu.UpdateRevLimiter(rpm, MaxRpm, _battery.IsBatteryConnected);
-        if (_battery.IsBatteryConnected != true)
+        RunCheckResult check = _ecu.CheckCanRun(_battery.IsBatteryConnected, _fuelSystem.FuelLevelPercentage);
+        if (_engine.IsRunning)
         {
-            _engine.Stall();
+            if (!check.Allowed)
+                _engine.Stall();
+
+            // While running, track the ECU live: warnings appear and clear as conditions change.
+            // While off, leave the message alone so a refused start's reason stays up.
+            _diagnosticMessage = check.Message;
         }
+        bool sparkOn = _ecu.UpdateRevLimiter(rpm, MaxRpm);
         double idleFloor = _ecu.UpdateIdleFloor(dt, _engine.TargetIdleRpm);
 
         // 3 update engine as usual
@@ -63,33 +76,37 @@ public class Vehicle
     public void SwitchBattery()
     {
         _battery.SwitchBattery();
-        _diagnosticMessage = null; // the old failure may no longer apply
+        ClearDiagnosticMessage(); // the old failure may no longer apply
     }
 
     // Start key: turns the engine off if running, otherwise asks the ECU and starts it if allowed
-    public void StartVehicle()
+    public void ToggleIgnition()
     {
         if (_engine.IsRunning)
         {
-            _engine.Stall();
+            _engine.Shutdown();
             return;
         }
 
-        StartCheckResult check = _ecu.CheckCanStart(_battery.IsBatteryConnected, _fuelSystem.FuelLevelL);
+        RunCheckResult check = _ecu.CheckCanRun(_battery.IsBatteryConnected, _fuelSystem.FuelLevelPercentage);
         if (!check.Allowed)
         {
             _diagnosticMessage = check.Message;
             return;
         }
 
-        _diagnosticMessage = null;
+        _diagnosticMessage = check.Message; // null, or a warning like low fuel
         _engine.StartEngine();
     }
 
 
-    // Open (+) or close (-) the throttle by the given amount; the setter keeps it between 0 and 1
+    // Open (+) or close (-) the throttle by the given amount; the setter keeps it between MinThrottle (6%) and 1
     public void ThrottleControl(double amount)
     {
         _engine.ThrottlePosition += amount;
+    }
+    private void ClearDiagnosticMessage()
+    {
+        _diagnosticMessage = null;
     }
 }
