@@ -57,8 +57,10 @@ public class EngineControlUnit
 
     // Rev limiter (#6): cut spark at max RPM, restore it once RPM falls below max by the gap.
     // The gap stops spark flickering on and off every tick. Returns whether spark is allowed.
-    public bool UpdateRevLimiter(double rpm, double maxRpm)
+    public bool UpdateRevLimiter(double rpm, double maxRpm, bool IsBatteryConnected)
     {
+        if (!IsBatteryConnected) return false;
+
         if (rpm >= maxRpm)
             _limiterActive = true;
         else if (rpm < maxRpm - RevLimiterRestoreGap)
