@@ -48,7 +48,15 @@ while (running)
     testVehicle.Update(dt);
 
     // \r returns to the start of the line so the display updates in place
-    Console.Write($"\rthrottle={testVehicle.ThrottlePosition * 100,3:F0}%  rpm={testVehicle.Rpm,5:F0}  | Bat = {testVehicle.BatteryVoltage,-8} | {testVehicle.EngineStatus,-21}");
+    Console.Write($"\rthrottle={testVehicle.ThrottlePosition * 100,3:F0}%  rpm={testVehicle.Rpm,5:F0}  | Bat = {testVehicle.BatteryVoltage,-8} | {testVehicle.EngineStatus,-40}");
+
+    // Empty tank ends the sim. A battery stall doesn't, so you can reconnect and restart.
+    if (testVehicle.OutOfFuel)
+    {
+        Console.WriteLine();
+        Console.WriteLine("Out of fuel. Sim over.");
+        running = false;
+    }
 
     Thread.Sleep((int)(dt * 1000));
 }
