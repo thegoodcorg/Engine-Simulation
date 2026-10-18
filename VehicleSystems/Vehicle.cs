@@ -28,7 +28,6 @@ public class Vehicle
     // ---- Values for Program.cs to display (read-only) ----
     public double Rpm => _engine.EngineSpeed;
     public double ThrottlePosition => _engine.ThrottlePosition;
-    public double EngineTorqueNm => _engine.MaxTorqueNm;
     public double FuelLevelL => _fuelSystem.FuelLevelL;
     public bool IsRunning => _engine.IsRunning;
     public bool OutOfFuel => _fuelSystem.FuelLevelL <= 0; // Program.cs ends the sim on this
@@ -81,11 +80,11 @@ public class Vehicle
     }
 
     // Start key: turns the engine off if running, otherwise asks the ECU and starts it if allowed
-    public void StartVehicle()
+    public void ToggleIgnition()
     {
         if (_engine.IsRunning)
         {
-            _engine.Stall();
+            _engine.Shutdown();
             return;
         }
 
@@ -101,7 +100,7 @@ public class Vehicle
     }
 
 
-    // Open (+) or close (-) the throttle by the given amount; the setter keeps it between 0 and 1
+    // Open (+) or close (-) the throttle by the given amount; the setter keeps it between MinThrottle (6%) and 1
     public void ThrottleControl(double amount)
     {
         _engine.ThrottlePosition += amount;

@@ -19,12 +19,12 @@ public class Engine
     public double MaxRpm { get; }
     public double TargetIdleRpm { get; } = 700;
     public double EngineSpeed { get; private set; }
-    public double MaxTorqueNm { get; set; } // BMEP(Pa) * dsiplacement(m^3)/(4pi)
+    public double MaxTorqueNm { get; } // BMEP(Pa) * dsiplacement(m^3)/(4pi)
     public double FrictionTorque { get; } // FMEP * displacement / (4pi)
     public double EngineTorqueNm { get; private set; } // torque being made right now
     public double NetTorque { get; private set; }
     public double Inertia { get; }
-    public bool IsRunning { get; set; }
+    public bool IsRunning { get; private set; }
 
     // MinThrottle = released, 1.0 = wide open. Values outside that range get clamped.
     private double _throttlePosition = MinThrottle;
@@ -42,7 +42,7 @@ public class Engine
         CylinderVolumeLiters = CalculateCylinderVolumeLiters();
         DisplacementLiters = TotalDisplacement();
         MaxRpm = CalculateRedline();
-        EngineSpeed = TargetIdleRpm;
+        EngineSpeed = 0; // starts switched off
         MaxTorqueNm = PressureToTorqueNm(BmepBar);
         FrictionTorque = PressureToTorqueNm(FmepBar);
         Inertia = InertiaPerLiter * DisplacementLiters;
@@ -52,7 +52,14 @@ public class Engine
         IsRunning = true;
     }
 
+    // Engine stops because something went wrong (battery cut, fuel ran out)
     public void Stall()
+    {
+        IsRunning = false;
+    }
+
+    // Engine stops because the driver turned the key off
+    public void Shutdown()
     {
         IsRunning = false;
     }

@@ -11,7 +11,7 @@ Console.WriteLine("Engine built!");
 Console.WriteLine($"Cyl bore = {testVehicle.BoreMm}mm / Cyl stroke = {testVehicle.StrokeLengthMm}mm / Cyl count = {testVehicle.CylinderCount}");
 Console.WriteLine($"Displacement = {testVehicle.DisplacementLiters:F2} L");
 Console.WriteLine($"Redline = {testVehicle.MaxRpm} RPM");
-Console.WriteLine($"Torque = {testVehicle.EngineTorqueNm}Nm");
+Console.WriteLine($"Torque = {testVehicle.PeakTorqueNm}Nm");
 
 Console.WriteLine();
 Console.WriteLine("3 = start/stop engine, W = throttle up, S = throttle down, Q = quit");
@@ -30,7 +30,7 @@ while (running)
                 break;
             case ConsoleKey.D3:
             case ConsoleKey.NumPad3:
-                testVehicle.StartVehicle();
+                testVehicle.ToggleIgnition();
                 break;
             case ConsoleKey.W:
                 testVehicle.ThrottleControl(throttleStep);
