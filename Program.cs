@@ -11,7 +11,7 @@ Console.WriteLine("Engine built!");
 Console.WriteLine($"Cyl bore = {testEngine.BoreMm}mm / Cyl stroke = {testEngine.StrokeLengthMm}mm / Cyl count = {testEngine.CylinderCount}");
 Console.WriteLine($"Displacement = {testEngine.DisplacementLiters:F2} L");
 Console.WriteLine($"Redline = {testEngine.MaxRpm} RPM");
-Console.WriteLine($"Torque = {testEngine.TorqueNm}Nm");
+Console.WriteLine($"Torque = {testEngine.TorqueNm:F0} Nm");
 
 Console.WriteLine();
 Console.WriteLine("W = throttle up, S = throttle down, Q = quit");
