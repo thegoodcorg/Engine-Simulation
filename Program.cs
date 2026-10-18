@@ -2,19 +2,19 @@
 using EngineSim.Constants;
 
 AmbientConditions idealConditions = new();
-Engine testEngine = new(95.5, 88.4, 6, idealConditions);
+Vehicle testVehicle = new(95.5, 88.4, 6, idealConditions);
 
 const double dt = 0.05;           // time step in seconds (20 updates per second)
 const double throttleStep = 0.01; // how much each W/S press changes the throttle
 
 Console.WriteLine("Engine built!");
-Console.WriteLine($"Cyl bore = {testEngine.BoreMm}mm / Cyl stroke = {testEngine.StrokeLengthMm}mm / Cyl count = {testEngine.CylinderCount}");
-Console.WriteLine($"Displacement = {testEngine.DisplacementLiters:F2} L");
-Console.WriteLine($"Redline = {testEngine.MaxRpm} RPM");
-Console.WriteLine($"Torque = {testEngine.TorqueNm}Nm");
+Console.WriteLine($"Cyl bore = {testVehicle.BoreMm}mm / Cyl stroke = {testVehicle.StrokeLengthMm}mm / Cyl count = {testVehicle.CylinderCount}");
+Console.WriteLine($"Displacement = {testVehicle.DisplacementLiters:F2} L");
+Console.WriteLine($"Redline = {testVehicle.MaxRpm} RPM");
+Console.WriteLine($"Torque = {testVehicle.EngineTorqueNm}Nm");
 
 Console.WriteLine();
-Console.WriteLine("W = throttle up, S = throttle down, Q = quit");
+Console.WriteLine("3 = start/stop engine, W = throttle up, S = throttle down, Q = quit");
 Console.CursorVisible = false;
 
 bool running = true;
@@ -25,11 +25,15 @@ while (running)
     {
         switch (Console.ReadKey(intercept: true).Key)
         {
+            case ConsoleKey.D3:
+            case ConsoleKey.NumPad3:
+                testVehicle.StartVehicle();
+                break;
             case ConsoleKey.W:
-                testEngine.ThrottleControl(throttleStep);
+                testVehicle.ThrottleControl(throttleStep);
                 break;
             case ConsoleKey.S:
-                testEngine.ThrottleControl(-throttleStep);
+                testVehicle.ThrottleControl(-throttleStep);
                 break;
             case ConsoleKey.Q:
             case ConsoleKey.Escape:
@@ -38,10 +42,10 @@ while (running)
         }
     }
 
-    testEngine.Update(dt);
+    testVehicle.Update(dt);
 
     // \r returns to the start of the line so the display updates in place
-    Console.Write($"\rthrottle={testEngine.ThrottlePosition * 100,3:F0}%  rpm={testEngine.EngineSpeed,5:F0}   ");
+    Console.Write($"\rthrottle={testVehicle.ThrottlePosition * 100,3:F0}%  rpm={testVehicle.Rpm,5:F0}  | {testVehicle.EngineStatus,-14}");
 
     Thread.Sleep((int)(dt * 1000));
 }
