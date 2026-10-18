@@ -56,7 +56,7 @@ public class Vehicle
         double rpm = _engine.EngineSpeed;
         // 1 read current values fuel level, battery, etc
         // 2 pass things to the ecu and decide what to do
-        RunCheckResult check = _ecu.CheckCanRun(_battery.IsBatteryConnected, _fuelSystem.FuelLevelL);
+        RunCheckResult check = _ecu.CheckCanRun(_battery.IsBatteryConnected, _fuelSystem.FuelLevelPercentage);
         if (_engine.IsRunning)
         {
             if (!check.Allowed)
@@ -88,7 +88,7 @@ public class Vehicle
             return;
         }
 
-        RunCheckResult check = _ecu.CheckCanRun(_battery.IsBatteryConnected, _fuelSystem.FuelLevelL);
+        RunCheckResult check = _ecu.CheckCanRun(_battery.IsBatteryConnected, _fuelSystem.FuelLevelPercentage);
         if (!check.Allowed)
         {
             _diagnosticMessage = check.Message;
