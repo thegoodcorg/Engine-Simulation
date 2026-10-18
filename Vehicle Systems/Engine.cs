@@ -19,7 +19,7 @@ public class Engine
     public double MaxRpm { get; }
     public double TargetIdleRpm { get; } = 700;
     public double EngineSpeed { get; private set; }
-    public double TorqueNm { get; set; } // BMEP(Pa) * dsiplacement(m^3)/(4pi)
+    public double MaxTorqueNm { get; set; } // BMEP(Pa) * dsiplacement(m^3)/(4pi)
     public double FrictionTorque { get; } // FMEP * displacement / (4pi)
     public double EngineTorqueNm { get; private set; } // torque being made right now
     public double NetTorque { get; private set; }
@@ -43,7 +43,7 @@ public class Engine
         DisplacementLiters = TotalDisplacement();
         MaxRpm = CalculateRedline();
         EngineSpeed = TargetIdleRpm;
-        TorqueNm = PressureToTorqueNm(BmepBar);
+        MaxTorqueNm = PressureToTorqueNm(BmepBar);
         FrictionTorque = PressureToTorqueNm(FmepBar);
         Inertia = InertiaPerLiter * DisplacementLiters;
     }
@@ -62,7 +62,7 @@ public class Engine
     {
         bool combusting = IsRunning && sparkOn;
         // 1. Torque at the current throttle, minus what friction takes away
-        EngineTorqueNm = combusting ? TorqueNm * ThrottlePosition : 0;
+        EngineTorqueNm = combusting ? MaxTorqueNm * ThrottlePosition : 0;
 
         double friction = EngineSpeed > 0 ? FrictionTorque : 0;
 
@@ -106,8 +106,8 @@ public class Engine
     {
         double pressureInPa = pressureBar * 100000;
 
-        double DisplacementInMCubed = DisplacementLiters / 1000;
+        double displacementInMCubed = DisplacementLiters / 1000;
 
-        return pressureInPa * DisplacementInMCubed / (4 * Math.PI);
+        return pressureInPa * displacementInMCubed / (4 * Math.PI);
     }
 }

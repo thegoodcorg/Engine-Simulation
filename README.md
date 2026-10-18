@@ -18,6 +18,8 @@ Run it in a real terminal (the VS Code terminal, PowerShell or Command Prompt). 
 | --- | --- |
 | W | Throttle up 1% |
 | S | Throttle down 1% |
+| 1 | Connect/Disconnect Battery |
+| 3 | Start engine |
 | Q or Esc | Quit |
 
 The sim prints the engine's specs, then shows a live line of throttle and RPM that updates 20 times a second.
