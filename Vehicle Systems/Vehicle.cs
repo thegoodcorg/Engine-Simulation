@@ -12,7 +12,7 @@ public class Vehicle
     private readonly Battery _battery;
     // private readonly Ignition _ignition;
 
-
+    private string? _diagnosticMessage; // why the last start was refused, or null
     public Vehicle(double bore, double stroke, int cylinders, AmbientConditions ambientConditions)
     {
         // One shared AmbientConditions, handed to anything that needs the outside air
@@ -31,7 +31,8 @@ public class Vehicle
     public double EngineTorqueNm => _engine.MaxTorqueNm;
     public double FuelLevelL => _fuelSystem.FuelLevelL;
     public bool IsRunning => _engine.IsRunning;
-    public string EngineStatus => _ecu.EngineStatus(_engine.IsRunning);
+    // A failed start's reason stays on screen until the next start attempt or battery switch
+    public string EngineStatus => _diagnosticMessage ?? _ecu.EngineStatus(_engine.IsRunning);
     public double BatteryVoltage => _battery.IsBatteryConnected ? _battery.BatteryChargeV : 0;
     // public bool SparkOn => _ignition.SparkOn;
 
@@ -49,7 +50,7 @@ public class Vehicle
         // 1 read current values fuel level, battery, etc
         // 2 pass things to the ecu and decide what to do
         bool sparkOn = _ecu.UpdateRevLimiter(rpm, MaxRpm, _battery.IsBatteryConnected);
-        if (sparkOn != true)
+        if (_battery.IsBatteryConnected != true)
         {
             _engine.Stall();
         }
@@ -62,6 +63,7 @@ public class Vehicle
     public void SwitchBattery()
     {
         _battery.SwitchBattery();
+        _diagnosticMessage = null; // the old failure may no longer apply
     }
 
     // Start key: turns the engine off if running, otherwise asks the ECU and starts it if allowed
@@ -74,8 +76,14 @@ public class Vehicle
         }
 
         StartCheckResult check = _ecu.CheckCanStart(_battery.IsBatteryConnected, _fuelSystem.FuelLevelL);
-        if (check.Allowed)
-            _engine.StartEngine();
+        if (!check.Allowed)
+        {
+            _diagnosticMessage = check.Message;
+            return;
+        }
+
+        _diagnosticMessage = null;
+        _engine.StartEngine();
     }
 
 
