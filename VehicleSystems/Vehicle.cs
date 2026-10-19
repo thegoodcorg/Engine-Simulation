@@ -1,4 +1,5 @@
 using EngineSim.Constants;
+using EngineSim.Electrical;
 
 namespace EngineSim;
 
@@ -9,9 +10,14 @@ public class Vehicle
     private readonly Engine _engine;
     private readonly EngineControlUnit _ecu;
     private readonly FuelSystem _fuelSystem;
+
+    // electrical components
     private readonly Battery _battery;
+
+    private readonly Starter _starter;
     // private readonly Ignition _ignition;
 
+    private bool _startKeyHeld;         // set by Program.cs every tick
     private string? _diagnosticMessage; // latest ECU message: a refusal, stall reason or warning, or null
     public Vehicle(double bore, double stroke, int cylinders, AmbientConditions ambientConditions)
     {
@@ -22,6 +28,7 @@ public class Vehicle
         _ecu = new EngineControlUnit(_engine.TargetIdleRpm);
         _fuelSystem = new FuelSystem(80);
         _battery = new Battery();
+        _starter = new Starter();
         // _ignition = new Ignition();
     }
 
@@ -36,7 +43,7 @@ public class Vehicle
     {
         get
         {
-            string status = _ecu.EngineStatus(_engine.IsRunning);
+            string status = _starter.StarterEngaged ? "Engine cranking" : _ecu.EngineStatus(_engine.IsRunning);
             return _diagnosticMessage is null ? status : $"{status}: {_diagnosticMessage}";
         }
     }
@@ -66,6 +73,10 @@ public class Vehicle
             // While off, leave the message alone so a refused start's reason stays up.
             _diagnosticMessage = check.Message;
         }
+        else
+        {
+            UpdateStarter(dt, check);
+        }
         bool sparkOn = _ecu.UpdateRevLimiter(rpm, MaxRpm);
         double idleFloor = _ecu.UpdateIdleFloor(dt, _engine.TargetIdleRpm);
 
@@ -79,24 +90,46 @@ public class Vehicle
         ClearDiagnosticMessage(); // the old failure may no longer apply
     }
 
-    // Start key: turns the engine off if running, otherwise asks the ECU and starts it if allowed
-    public void ToggleIgnition()
+    // Start key: Program.cs reports every tick whether it's held down
+    public void SetStartKeyHeld(bool held)
     {
-        if (_engine.IsRunning)
+        _startKeyHeld = held;
+    }
+
+    // Stop key: turns the engine off. Does nothing if it's already off.
+    public void ShutdownEngine()
+    {
+        _engine.Shutdown();
+    }
+
+    // While the engine is off and the start key is held, the starter turns the engine.
+    // Held for Engine.CrankTimeSeconds → engine starts. Let go early → the timer resets.
+    // The ECU check runs every tick, so a refusal shows straight away and a fault mid-crank stops it.
+    private void UpdateStarter(double dt, RunCheckResult check)
+    {
+        if (!_startKeyHeld)
         {
-            _engine.Shutdown();
+            _starter.Release();
             return;
         }
 
-        RunCheckResult check = _ecu.CheckCanRun(_battery.IsBatteryConnected, _fuelSystem.FuelLevelPercentage);
         if (!check.Allowed)
         {
             _diagnosticMessage = check.Message;
+            _starter.Release();
             return;
         }
 
-        _diagnosticMessage = check.Message; // null, or a warning like low fuel
-        _engine.StartEngine();
+        _starter.HasBatteryPower = _battery.IsBatteryConnected;
+        _starter.TurnEngine();
+        _starter.Update(dt);
+
+        if (_starter.EngagedTimeSec >= Engine.CrankTimeSeconds)
+        {
+            _diagnosticMessage = check.Message; // null, or a warning like low fuel
+            _engine.StartEngine();
+            _starter.Release();
+        }
     }
 
 

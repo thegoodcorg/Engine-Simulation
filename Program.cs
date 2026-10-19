@@ -1,5 +1,6 @@
 ﻿using EngineSim;
 using EngineSim.Constants;
+using EngineSim.Helpers;
 
 AmbientConditions idealConditions = new();
 Vehicle testVehicle = new(95.5, 88.4, 6, idealConditions);
@@ -14,7 +15,7 @@ Console.WriteLine($"Redline = {testVehicle.MaxRpm} RPM");
 Console.WriteLine($"Torque = {testVehicle.PeakTorqueNm}Nm");
 
 Console.WriteLine();
-Console.WriteLine("3 = start/stop engine, W = throttle up, S = throttle down, Q = quit");
+Console.WriteLine("1 = battery on/off, hold 3 = start engine, 4 = stop engine, W = throttle up, S = throttle down, Q = quit");
 Console.CursorVisible = false;
 
 bool running = true;
@@ -28,9 +29,10 @@ while (running)
             case ConsoleKey.D1:
                 testVehicle.SwitchBattery();
                 break;
-            case ConsoleKey.D3:
-            case ConsoleKey.NumPad3:
-                testVehicle.ToggleIgnition();
+            // 3 (start) isn't handled here: it has to be held, which ReadKey can't tell. See below.
+            case ConsoleKey.D4:
+            case ConsoleKey.NumPad4:
+                testVehicle.ShutdownEngine();
                 break;
             case ConsoleKey.W:
                 testVehicle.ThrottleControl(throttleStep);
@@ -45,6 +47,7 @@ while (running)
         }
     }
 
+    testVehicle.SetStartKeyHeld(KeyState.IsDown(ConsoleKey.D3) || KeyState.IsDown(ConsoleKey.NumPad3));
     testVehicle.Update(dt);
 
     // \r returns to the start of the line so the display updates in place

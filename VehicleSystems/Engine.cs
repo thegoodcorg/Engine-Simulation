@@ -10,6 +10,7 @@ public class Engine
     private const double BmepBar = 12.5;                 // brake mean effective pressure, used for torque
     private const double FmepBar = 1.2;                    // Friction mean effective pressure, used for torque
     private const double InertiaPerLiter = 0.05;            // kg·m² per liter of displacement
+    public const double CrankTimeSeconds = 0.5;
 
     public double BoreMm { get; }  // Diameter of the cylinder
     public double StrokeLengthMm { get; } // distance the piston moves up/down

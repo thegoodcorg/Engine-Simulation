@@ -22,7 +22,6 @@ public class EngineControlUnit
 
     // Rev limiter state: true while spark is being cut
     private bool _limiterActive;
-
     public double IdleFloorRpm => _idleFloorRpm;
 
 
