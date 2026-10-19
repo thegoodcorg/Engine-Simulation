@@ -4,11 +4,25 @@ namespace EngineSim;
 // Message is the reason when not allowed, a warning when allowed (e.g. low fuel), or null when all is well.
 public record RunCheckResult(bool Allowed, string? Message);
 
+// Everything the ECU reads in one tick. The Vehicle fills this in from the sensors.
+public record EcuInputs(
+    double Rpm,
+    double MaxRpm,
+    bool BatteryConnected,
+    double FuelLevelPercentage,
+    bool EngineRunning,
+    bool Cranking);
+
+// Everything the ECU decides in one tick. The Vehicle applies these to the components.
+// AllowRun + Message come from the run check, SparkOn goes to the ignition, IdleFloorRpm to the engine.
+public record EcuOutputs(bool AllowRun, bool SparkOn, double IdleFloorRpm, string? Message);
+
 // Every control decision lives here. The ECU holds NO references to other systems:
 // the Vehicle passes in the facts as parameters, and the ECU returns decisions.
 // It can keep its own internal state (idle wobble timer, rev limiter flag).
 public class EngineControlUnit
 {
+    public const double TargetIdleRpm = 700;
     private const double IdleVariation = 0.02;        // idle wobbles by ± this fraction of target idle
     private const double IdleWobbleIntervalS = 1.0;   // seconds between new random idle targets
     private const double IdleWobbleRate = 2.0;        // how quickly the floor drifts toward its target
@@ -16,25 +30,27 @@ public class EngineControlUnit
     private const double LowFuelPercentage = 5;       // low fuel warning below this % of the tank
 
     // Idle floor state
-    private double _idleFloorRpm;
-    private double _idleTargetRpm;
+    private double _idleFloorRpm = TargetIdleRpm;
+    private double _idleTargetRpm = TargetIdleRpm;
     private double _timeUntilNewIdleTarget;
 
     // Rev limiter state: true while spark is being cut
     private bool _limiterActive;
-    public double IdleFloorRpm => _idleFloorRpm;
 
 
-
-    public EngineControlUnit(double targetIdleRpm)
+    // One tick of the ECU: read the inputs, make every decision, return them together.
+    public EcuOutputs Update(double dt, EcuInputs inputs)
     {
-        _idleFloorRpm = targetIdleRpm;
-        _idleTargetRpm = targetIdleRpm;
+        RunCheckResult check = CheckCanRun(inputs.BatteryConnected, inputs.FuelLevelPercentage);
+        bool sparkOn = DecideSpark(inputs);
+        double idleFloor = UpdateIdleFloor(dt);
+
+        return new EcuOutputs(check.Allowed, sparkOn, idleFloor, check.Message);
     }
 
     // Run checks: used at start AND every tick, so starting and stalling follow the same rules.
     // Each ticket adds one (#2 battery, #4 fuel)
-    public RunCheckResult CheckCanRun(bool batteryConnected, double fuelLevelPercentage)
+    private RunCheckResult CheckCanRun(bool batteryConnected, double fuelLevelPercentage)
     {
         if (!batteryConnected)
             return new RunCheckResult(false, "battery not connected");
@@ -53,9 +69,17 @@ public class EngineControlUnit
     }
 
 
+    // Spark (#6): needs battery power, an engine that is running or cranking, and the rev limiter's OK.
+    // The limiter is updated every tick regardless, so its state tracks RPM even while spark is off.
+    private bool DecideSpark(EcuInputs inputs)
+    {
+        bool limiterOk = UpdateRevLimiter(inputs.Rpm, inputs.MaxRpm);
+        return inputs.BatteryConnected && (inputs.EngineRunning || inputs.Cranking) && limiterOk;
+    }
+
     // Rev limiter (#6): cut spark at max RPM, restore it once RPM falls below max by the gap.
     // The gap stops spark flickering on and off every tick. Returns whether spark is allowed.
-    public bool UpdateRevLimiter(double rpm, double maxRpm)
+    private bool UpdateRevLimiter(double rpm, double maxRpm)
     {
         if (rpm >= maxRpm)
             _limiterActive = true;
@@ -67,13 +91,13 @@ public class EngineControlUnit
 
     // Idle floor (moved here from Engine): picks a new random target every IdleWobbleIntervalS
     // seconds and eases the floor toward it. Returns the floor for this tick.
-    public double UpdateIdleFloor(double dt, double targetIdleRpm)
+    private double UpdateIdleFloor(double dt)
     {
         _timeUntilNewIdleTarget -= dt;
         if (_timeUntilNewIdleTarget <= 0)
         {
-            int idleRange = (int)(targetIdleRpm * IdleVariation);
-            _idleTargetRpm = targetIdleRpm + Random.Shared.Next(-idleRange, idleRange + 1);
+            int idleRange = (int)(TargetIdleRpm * IdleVariation);
+            _idleTargetRpm = TargetIdleRpm + Random.Shared.Next(-idleRange, idleRange + 1);
             _timeUntilNewIdleTarget = IdleWobbleIntervalS;
         }
         _idleFloorRpm += (_idleTargetRpm - _idleFloorRpm) * IdleWobbleRate * dt;

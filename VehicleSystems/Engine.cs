@@ -18,7 +18,6 @@ public class Engine
     public double CylinderVolumeLiters { get; }
     public double DisplacementLiters { get; }
     public double MaxRpm { get; }
-    public double TargetIdleRpm { get; } = 700;
     public double EngineSpeed { get; private set; }
     public double MaxTorqueNm { get; } // BMEP(Pa) * dsiplacement(m^3)/(4pi)
     public double FrictionTorque { get; } // FMEP * displacement / (4pi)

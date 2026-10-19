@@ -1,0 +1,98 @@
+using EngineSim;
+using EngineSim.Constants;
+using EngineSim.Electrical;
+
+namespace EngineSim.Tests;
+
+public class IgnitionTests
+{
+    private const double Dt = 0.05;
+
+    [Fact]
+    public void IgnitionSystem_StartsWithSparkOff()
+    {
+        Assert.False(new IgnitionSystem().SparkOn);
+    }
+
+    [Fact]
+    public void IgnitionSystem_SetSpark_TurnsSparkOnAndOff()
+    {
+        var ignition = new IgnitionSystem();
+
+        ignition.SetSpark(true);
+        Assert.True(ignition.SparkOn);
+
+        ignition.SetSpark(false);
+        Assert.False(ignition.SparkOn);
+    }
+
+    [Fact]
+    public void Engine_NoSpark_MakesNoTorqueAndSlowsDown()
+    {
+        var engine = new Engine(95.5, 88.4, 6, new AmbientConditions());
+        engine.StartEngine();
+        engine.ThrottlePosition = 1;
+        for (int i = 0; i < 10; i++)
+            engine.Update(Dt, sparkOn: true, idleFloorRpm: 0); // get some speed up
+        double rpmBefore = engine.EngineSpeed;
+
+        engine.Update(Dt, sparkOn: false, idleFloorRpm: 0);
+
+        Assert.Equal(0, engine.EngineTorqueNm);
+        Assert.True(engine.EngineSpeed < rpmBefore);
+    }
+
+    // Ticket #6 "done when": holding full throttle bounces off the limiter instead of sitting at redline
+    [Fact]
+    public void Vehicle_FullThrottle_BouncesOffRevLimiter()
+    {
+        var vehicle = StartedVehicle();
+        vehicle.ThrottleControl(1);
+
+        var rpms = new List<double>();
+        var sparks = new List<bool>();
+        for (int i = 0; i < 60; i++) // 3 seconds: reaches redline, then bounces
+        {
+            vehicle.Update(Dt);
+            rpms.Add(vehicle.Rpm);
+            sparks.Add(vehicle.SparkOn);
+        }
+
+        // Look at the last second, well after reaching redline
+        var settledRpms = rpms.Skip(40).ToList();
+        var settledSparks = sparks.Skip(40).ToList();
+
+        Assert.All(settledRpms, rpm => Assert.True(rpm <= vehicle.MaxRpm));
+        Assert.Contains(true, settledSparks);                         // spark comes back...
+        Assert.Contains(false, settledSparks);                        // ...and gets cut again
+        Assert.Contains(settledRpms, rpm => rpm < vehicle.MaxRpm - 100); // RPM really drops, not pinned at redline
+    }
+
+    [Fact]
+    public void Vehicle_BatteryCut_TurnsSparkOffAndStalls()
+    {
+        var vehicle = StartedVehicle();
+        Assert.True(vehicle.SparkOn);
+
+        vehicle.SwitchBattery();
+        vehicle.Update(Dt);
+
+        Assert.False(vehicle.SparkOn);
+        Assert.False(vehicle.IsRunning);
+    }
+
+    // Battery on, start key held for the crank, then released
+    private static Vehicle StartedVehicle()
+    {
+        var vehicle = new Vehicle(95.5, 88.4, 6, new AmbientConditions());
+        vehicle.SwitchBattery();
+        vehicle.SetStartKeyHeld(true);
+        for (int i = 0; i * Dt <= Engine.CrankTimeSeconds + Dt; i++)
+            vehicle.Update(Dt);
+        vehicle.SetStartKeyHeld(false);
+        vehicle.Update(Dt);
+
+        Assert.True(vehicle.IsRunning);
+        return vehicle;
+    }
+}
