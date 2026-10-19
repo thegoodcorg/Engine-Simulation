@@ -15,7 +15,7 @@ public class Vehicle
     private readonly Battery _battery;
 
     private readonly Starter _starter;
-    // private readonly Ignition _ignition;
+    private readonly IgnitionSystem _ignitionSystem;
 
     private bool _startKeyHeld;         // set by Program.cs every tick
     private string? _diagnosticMessage; // latest ECU message: a refusal, stall reason or warning, or null
@@ -25,11 +25,11 @@ public class Vehicle
         _ambientConditions = ambientConditions;
 
         _engine = new Engine(bore, stroke, cylinders, _ambientConditions);
-        _ecu = new EngineControlUnit(_engine.TargetIdleRpm);
+        _ecu = new EngineControlUnit();
         _fuelSystem = new FuelSystem(80);
         _battery = new Battery();
         _starter = new Starter();
-        // _ignition = new Ignition();
+        _ignitionSystem = new IgnitionSystem();
     }
 
     // ---- Values for Program.cs to display (read-only) ----
@@ -48,7 +48,7 @@ public class Vehicle
         }
     }
     public double BatteryVoltage => _battery.IsBatteryConnected ? _battery.BatteryChargeV : 0;
-    // public bool SparkOn => _ignition.SparkOn;
+    public bool SparkOn => _ignitionSystem.SparkOn;
 
     // Engine specs for the startup summary
     public double BoreMm => _engine.BoreMm;
@@ -60,28 +60,37 @@ public class Vehicle
 
     public void Update(double dt)
     {
-        double rpm = _engine.EngineSpeed;
-        // 1 read current values fuel level, battery, etc
-        // 2 pass things to the ecu and decide what to do
-        RunCheckResult check = _ecu.CheckCanRun(_battery.IsBatteryConnected, _fuelSystem.FuelLevelPercentage);
+        // 1 read the sensors, 2 let the ECU decide everything, 3 apply its decisions
+        EcuOutputs ecu = _ecu.Update(dt, ReadSensors());
+        _ignitionSystem.SetSpark(ecu.SparkOn);
+
         if (_engine.IsRunning)
         {
-            if (!check.Allowed)
+            if (!ecu.AllowRun)
                 _engine.Stall();
 
             // While running, track the ECU live: warnings appear and clear as conditions change.
             // While off, leave the message alone so a refused start's reason stays up.
-            _diagnosticMessage = check.Message;
+            _diagnosticMessage = ecu.Message;
         }
         else
         {
-            UpdateStarter(dt, check);
+            UpdateStarter(dt, ecu);
         }
-        bool sparkOn = _ecu.UpdateRevLimiter(rpm, MaxRpm);
-        double idleFloor = _ecu.UpdateIdleFloor(dt, _engine.TargetIdleRpm);
 
-        // 3 update engine as usual
-        _engine.Update(dt, sparkOn, idleFloor);
+        _engine.Update(dt, _ignitionSystem.SparkOn, ecu.IdleFloorRpm);
+    }
+
+    // Snapshot of everything the ECU reads this tick
+    private EcuInputs ReadSensors()
+    {
+        return new EcuInputs(
+            Rpm: _engine.EngineSpeed,
+            MaxRpm: _engine.MaxRpm,
+            BatteryConnected: _battery.IsBatteryConnected,
+            FuelLevelPercentage: _fuelSystem.FuelLevelPercentage,
+            EngineRunning: _engine.IsRunning,
+            Cranking: _starter.StarterEngaged);
     }
 
     public void SwitchBattery()
@@ -105,7 +114,7 @@ public class Vehicle
     // While the engine is off and the start key is held, the starter turns the engine.
     // Held for Engine.CrankTimeSeconds → engine starts. Let go early → the timer resets.
     // The ECU check runs every tick, so a refusal shows straight away and a fault mid-crank stops it.
-    private void UpdateStarter(double dt, RunCheckResult check)
+    private void UpdateStarter(double dt, EcuOutputs ecu)
     {
         if (!_startKeyHeld)
         {
@@ -113,9 +122,9 @@ public class Vehicle
             return;
         }
 
-        if (!check.Allowed)
+        if (!ecu.AllowRun)
         {
-            _diagnosticMessage = check.Message;
+            _diagnosticMessage = ecu.Message;
             _starter.Release();
             return;
         }
@@ -126,7 +135,7 @@ public class Vehicle
 
         if (_starter.EngagedTimeSec >= Engine.CrankTimeSeconds)
         {
-            _diagnosticMessage = check.Message; // null, or a warning like low fuel
+            _diagnosticMessage = ecu.Message; // null, or a warning like low fuel
             _engine.StartEngine();
             _starter.Release();
         }

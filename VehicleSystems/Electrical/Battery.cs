@@ -4,8 +4,8 @@ namespace EngineSim.Electrical;
 
 public class Battery
 {
-    public bool IsBatteryConnected { get; set; } = false;
     public double BatteryChargeV = 12.6;
+    public bool IsBatteryConnected { get; private set; } = false;
 
     public void SwitchBattery()
     {
