@@ -7,13 +7,11 @@ public class Vehicle
 {
     // Components are private: Program.cs talks to the Vehicle, never to a component directly
     private readonly AmbientConditions _ambientConditions;
+    private readonly FuelSystem _fuelSystem;
     private readonly Engine _engine;
     private readonly EngineControlUnit _ecu;
-    private readonly FuelSystem _fuelSystem;
-
     // electrical components
     private readonly Battery _battery;
-
     private readonly Starter _starter;
     private readonly IgnitionSystem _ignitionSystem;
 
@@ -24,9 +22,9 @@ public class Vehicle
         // One shared AmbientConditions, handed to anything that needs the outside air
         _ambientConditions = ambientConditions;
 
-        _engine = new Engine(bore, stroke, cylinders, _ambientConditions);
-        _ecu = new EngineControlUnit();
         _fuelSystem = new FuelSystem(80);
+        _engine = new Engine(bore, stroke, cylinders, _ambientConditions, _fuelSystem.Fuel);
+        _ecu = new EngineControlUnit(_fuelSystem.Fuel);
         _battery = new Battery();
         _starter = new Starter();
         _ignitionSystem = new IgnitionSystem();
@@ -34,6 +32,8 @@ public class Vehicle
 
     // ---- Values for Program.cs to display (read-only) ----
     public double Rpm => _engine.EngineSpeed;
+    public double TorqueNm => _engine.NetTorque;              // torque at the crank, after friction (negative while the idle floor holds RPM up)
+    public double MafGPerS => _engine.AirflowGPerS;           // mass airflow, as an OBD2 reader shows it
     public double ThrottlePosition => _engine.ThrottlePosition;
     public double FuelLevelL => _fuelSystem.FuelLevelL;
     public bool IsRunning => _engine.IsRunning;
@@ -56,7 +56,7 @@ public class Vehicle
     public int CylinderCount => _engine.CylinderCount;
     public double DisplacementLiters => _engine.DisplacementLiters;
     public double MaxRpm => _engine.MaxRpm;
-    public double PeakTorqueNm => _engine.MaxTorqueNm;
+    public double PeakTorqueNm => _engine.MaxBrakeTorqueNm; // at the crank, after friction
 
     public void Update(double dt)
     {
@@ -78,7 +78,10 @@ public class Vehicle
             UpdateStarter(dt, ecu);
         }
 
-        _engine.Update(dt, _ignitionSystem.SparkOn, ecu.IdleFloorRpm);
+        _engine.Update(dt, _ignitionSystem.SparkOn, ecu.IdleFloorRpm, ecu.FuelPerCycleG);
+
+        // Drain what the engine used: grams ÷ 1000 = kg, then ÷ density (kg/L) = liters
+        _fuelSystem.Drain(_engine.FuelBurnedG / 1000 / _fuelSystem.Fuel.DensityKgPerL);
     }
 
     // Snapshot of everything the ECU reads this tick
@@ -90,7 +93,8 @@ public class Vehicle
             BatteryConnected: _battery.IsBatteryConnected,
             FuelLevelPercentage: _fuelSystem.FuelLevelPercentage,
             EngineRunning: _engine.IsRunning,
-            Cranking: _starter.StarterEngaged);
+            Cranking: _starter.StarterEngaged,
+            MafGPerS: _engine.AirflowGPerS);
     }
 
     public void SwitchBattery()

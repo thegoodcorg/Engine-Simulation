@@ -11,11 +11,13 @@ public record EcuInputs(
     bool BatteryConnected,
     double FuelLevelPercentage,
     bool EngineRunning,
-    bool Cranking);
+    bool Cranking,
+    double MafGPerS);            // mass airflow (MAF) reading: grams of air entering per second, as an OBD2 reader shows it
 
 // Everything the ECU decides in one tick. The Vehicle applies these to the components.
-// AllowRun + Message come from the run check, SparkOn goes to the ignition, IdleFloorRpm to the engine.
-public record EcuOutputs(bool AllowRun, bool SparkOn, double IdleFloorRpm, string? Message);
+// AllowRun + Message come from the run check, SparkOn goes to the ignition,
+// IdleFloorRpm and FuelPerCycleG to the engine.
+public record EcuOutputs(bool AllowRun, bool SparkOn, double IdleFloorRpm, double FuelPerCycleG, string? Message);
 
 // Every control decision lives here. The ECU holds NO references to other systems:
 // the Vehicle passes in the facts as parameters, and the ECU returns decisions.
@@ -28,6 +30,7 @@ public class EngineControlUnit
     private const double IdleWobbleRate = 2.0;        // how quickly the floor drifts toward its target
     private const double RevLimiterRestoreGap = 150;  // spark returns this far below max RPM
     private const double LowFuelPercentage = 5;       // low fuel warning below this % of the tank
+    private const double MinRpmForFuel = 50;          // below this the MAF reading means nothing, so no fuel
 
     // Idle floor state
     private double _idleFloorRpm = TargetIdleRpm;
@@ -37,6 +40,14 @@ public class EngineControlUnit
     // Rev limiter state: true while spark is being cut
     private bool _limiterActive;
 
+    // The fuel this ECU is calibrated for. Data only, not a reference to the fuel system.
+    private readonly FuelProperties _fuel;
+
+    public EngineControlUnit(FuelProperties fuel)
+    {
+        _fuel = fuel;
+    }
+
 
     // One tick of the ECU: read the inputs, make every decision, return them together.
     public EcuOutputs Update(double dt, EcuInputs inputs)
@@ -44,8 +55,30 @@ public class EngineControlUnit
         RunCheckResult check = CheckCanRun(inputs.BatteryConnected, inputs.FuelLevelPercentage);
         bool sparkOn = DecideSpark(inputs);
         double idleFloor = UpdateIdleFloor(dt);
+        double fuelPerCycle = DecideFuel(inputs, sparkOn);
 
-        return new EcuOutputs(check.Allowed, sparkOn, idleFloor, check.Message);
+        return new EcuOutputs(check.Allowed, sparkOn, idleFloor, fuelPerCycle, check.Message);
+    }
+
+    // Fuel (#5): air per cycle from the MAF reading, ÷ target air-fuel ratio.
+    // MAF reads per second, so divide by cycles per second (RPM / 120) to get per cycle.
+    private double DecideFuel(EcuInputs inputs, bool sparkOn)
+    {
+        if (!sparkOn)
+            return 0; // fuel cut with the spark: engine off, no battery, or rev limiter
+
+        if (inputs.Rpm < MinRpmForFuel)
+            return 0; // stopped or barely turning: no meaningful reading, and avoids dividing by 0
+
+        double airPerCycleG = inputs.MafGPerS / (inputs.Rpm / 120);
+        return airPerCycleG / TargetAfr();
+    }
+
+    // The air-fuel ratio to run at. Always stoichiometric for now;
+    // richer at full throttle can come later by changing only this.
+    private double TargetAfr()
+    {
+        return _fuel.StoichiometricAfr;
     }
 
     // Run checks: used at start AND every tick, so starting and stalling follow the same rules.

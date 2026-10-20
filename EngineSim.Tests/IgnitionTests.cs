@@ -29,14 +29,15 @@ public class IgnitionTests
     [Fact]
     public void Engine_NoSpark_MakesNoTorqueAndSlowsDown()
     {
-        var engine = new Engine(95.5, 88.4, 6, new AmbientConditions());
+        var engine = new Engine(95.5, 88.4, 6, new AmbientConditions(), FuelProperties.PumpGas);
         engine.StartEngine();
         engine.ThrottlePosition = 1;
+        double fuelPerCycleG = engine.AirMassPerCycleG / FuelProperties.PumpGas.StoichiometricAfr;
         for (int i = 0; i < 10; i++)
-            engine.Update(Dt, sparkOn: true, idleFloorRpm: 0); // get some speed up
+            engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, fuelPerCycleG); // get some speed up
         double rpmBefore = engine.EngineSpeed;
 
-        engine.Update(Dt, sparkOn: false, idleFloorRpm: 0);
+        engine.Update(Dt, sparkOn: false, idleFloorRpm: 0, fuelPerCycleG);
 
         Assert.Equal(0, engine.EngineTorqueNm);
         Assert.True(engine.EngineSpeed < rpmBefore);
@@ -87,7 +88,9 @@ public class IgnitionTests
         var vehicle = new Vehicle(95.5, 88.4, 6, new AmbientConditions());
         vehicle.SwitchBattery();
         vehicle.SetStartKeyHeld(true);
-        for (int i = 0; i * Dt <= Engine.CrankTimeSeconds + Dt; i++)
+        // A whole number of ticks past the crank time (comparing float times can land either side)
+        int crankTicks = (int)Math.Ceiling(Engine.CrankTimeSeconds / Dt) + 1;
+        for (int i = 0; i < crankTicks; i++)
             vehicle.Update(Dt);
         vehicle.SetStartKeyHeld(false);
         vehicle.Update(Dt);
