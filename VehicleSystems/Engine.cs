@@ -1,4 +1,5 @@
 using EngineSim.Constants;
+using EngineSim.VehicleSystems.Mechanical;
 
 namespace EngineSim;
 
@@ -13,8 +14,6 @@ public class Engine
     public const double VolumetricEfficiency = 0.9;      // the cylinders only fill to 90% of their volume
     public const double ThermalEfficiency = 0.36;        // share of the fuel's energy that pushes the pistons (indicated, so friction isn't counted twice)
 
-    public double BoreMm { get; }  // Diameter of the cylinder
-    public double StrokeLengthMm { get; } // distance the piston moves up/down
     public int CylinderCount { get; }
     public double CylinderVolumeLiters { get; }
     public double DisplacementLiters { get; }
@@ -44,6 +43,7 @@ public class Engine
     // (the figure a manufacturer quotes as peak torque).
     public double MaxIndicatedTorqueNm => TorqueFromFuelNm(AirMassG(1.0) / _fuel.StoichiometricAfr);
     public double MaxBrakeTorqueNm => MaxIndicatedTorqueNm - FrictionTorque;
+    public CylinderGeometry Geometry { get; }  // bore, stroke, rod length, compression ratio and volume vs crank angle
 
     // MinThrottle = released, 1.0 = wide open. Values outside that range get clamped.
     private double _throttlePosition = MinThrottle;
@@ -53,12 +53,19 @@ public class Engine
         set => _throttlePosition = Math.Clamp(value, MinThrottle, 1.0);
     }
 
-    public Engine(double bore, double stroke, int cylinders, AmbientConditions ambientConditions, FuelProperties fuel)
+    public Engine(
+        double boreMm,
+        double strokeMm,
+        double conRodLengthMm,
+        double compressionRatio,
+        int cylinders,
+        AmbientConditions ambientConditions,
+        FuelProperties fuel)
     {
-        BoreMm = bore;
-        StrokeLengthMm = stroke;
+        // Built first: displacement and redline below read from it
+        Geometry = new CylinderGeometry(boreMm, strokeMm, conRodLengthMm, compressionRatio);
         CylinderCount = cylinders;
-        CylinderVolumeLiters = CalculateCylinderVolumeLiters();
+        CylinderVolumeLiters = Geometry.SweptVolumeCc / 1000; // cc → liters
         DisplacementLiters = TotalDisplacement();
         MaxRpm = CalculateRedline();
         EngineSpeed = 0; // starts switched off
@@ -116,20 +123,14 @@ public class Engine
         EngineSpeed = Math.Clamp(EngineSpeed, floor, MaxRpm);
     }
 
-    // Volume swept by one piston: π/4 × bore² × stroke, converted from mm³ to liters
-    private double CalculateCylinderVolumeLiters()
-    {
-        return Math.PI / 4 * Math.Pow(BoreMm, 2) * StrokeLengthMm / 1_000_000;
-    }
-
     private double TotalDisplacement()
     {
-        return CalculateCylinderVolumeLiters() * CylinderCount;
+        return CylinderVolumeLiters * CylinderCount;
     }
 
-    private double CalculateRedline()
+    private double CalculateRedline() // TODO: this will eventually die for a better simulation of the redline
     {
-        double maxRpm = 30 * PistonSpeedLimitMs / StrokeLengthMm * 1000; // multiply by 1000 to get from mm on stroke length to meters on the piston speed
+        double maxRpm = 30 * PistonSpeedLimitMs / Geometry.StrokeLengthMm * 1000; // multiply by 1000 to get from mm on stroke length to meters on the piston speed
 
         return Math.Floor(maxRpm / 100) * 100; // round down to the closest 100 IE 8769 -> 8700
     }

@@ -3,13 +3,15 @@ using EngineSim.Constants;
 using EngineSim.Helpers;
 
 AmbientConditions idealConditions = new();
-Vehicle testVehicle = new(95.5, 88.4, 6, idealConditions);
+Engine testEngine = new(95.5, 88.4, 144.2, 10.3, 6, idealConditions, FuelProperties.PumpGas); // bore, stroke, rod length (mm), compression ratio, cylinders
+Vehicle testVehicle = new(testEngine);
 
 const double dt = 0.05;           // time step in seconds (20 updates per second)
 const double throttleStep = 0.01; // how much each W/S press changes the throttle
 
 Console.WriteLine("Engine built!");
 Console.WriteLine($"Cyl bore = {testVehicle.BoreMm}mm / Cyl stroke = {testVehicle.StrokeLengthMm}mm / Cyl count = {testVehicle.CylinderCount}");
+Console.WriteLine($"Rod length = {testVehicle.RodLengthMm}mm / Compression ratio = {testVehicle.CompressionRatio}:1");
 Console.WriteLine($"Displacement = {testVehicle.DisplacementLiters:F2} L");
 Console.WriteLine($"Redline = {testVehicle.MaxRpm} RPM");
 Console.WriteLine($"Peak torque = {testVehicle.PeakTorqueNm:F0} Nm (at the crank, after friction)");

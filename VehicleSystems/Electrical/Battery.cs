@@ -1,6 +1,6 @@
 using EngineSim.Constants;
 
-namespace EngineSim.Electrical;
+namespace EngineSim.VehicleSystems.Electrical;
 
 public class Battery
 {

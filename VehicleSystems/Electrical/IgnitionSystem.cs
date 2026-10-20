@@ -1,4 +1,4 @@
-namespace EngineSim.Electrical;
+namespace EngineSim.VehicleSystems.Electrical;
 
 // Ignition (#6): whether the plugs are firing. It doesn't decide anything:
 // the ECU decides each tick and the Vehicle passes the decision in here.

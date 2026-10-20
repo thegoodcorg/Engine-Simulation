@@ -1,4 +1,5 @@
-namespace EngineSim.Electrical;
+namespace EngineSim.VehicleSystems.Electrical;
+
 
 // Starter motor: spins the engine so it can start. It needs battery power to turn.
 // No real cranking yet (#3): once it turns the engine, RPM goes straight to idle. Cranking comes later.

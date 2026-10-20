@@ -1,6 +1,6 @@
 using EngineSim;
 using EngineSim.Constants;
-using EngineSim.Electrical;
+using EngineSim.VehicleSystems.Electrical;
 
 namespace EngineSim.Tests;
 
@@ -29,7 +29,7 @@ public class IgnitionTests
     [Fact]
     public void Engine_NoSpark_MakesNoTorqueAndSlowsDown()
     {
-        var engine = new Engine(95.5, 88.4, 6, new AmbientConditions(), FuelProperties.PumpGas);
+        var engine = new Engine(95.5, 88.4, 144.2, 10.3, 6, new AmbientConditions(), FuelProperties.PumpGas);
         engine.StartEngine();
         engine.ThrottlePosition = 1;
         double fuelPerCycleG = engine.AirMassPerCycleG / FuelProperties.PumpGas.StoichiometricAfr;
@@ -85,7 +85,7 @@ public class IgnitionTests
     // Battery on, start key held for the crank, then released
     private static Vehicle StartedVehicle()
     {
-        var vehicle = new Vehicle(95.5, 88.4, 6, new AmbientConditions());
+        var vehicle = new Vehicle(new Engine(95.5, 88.4, 144.2, 10.3, 6, new AmbientConditions(), FuelProperties.PumpGas));
         vehicle.SwitchBattery();
         vehicle.SetStartKeyHeld(true);
         // A whole number of ticks past the crank time (comparing float times can land either side)

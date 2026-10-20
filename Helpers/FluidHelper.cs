@@ -1,6 +1,6 @@
-namespace EngineSim.Conversions;
+namespace EngineSim.Helpers;
 
-public class FluidConversions
+public class FluidHelper
 {
     public static double ConvertGallonsToLiters(double gal)
     {
