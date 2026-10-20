@@ -1,5 +1,5 @@
 using EngineSim;
-using EngineSim.Conversions;
+using EngineSim.Helpers;
 
 namespace EngineSim.Tests;
 
@@ -13,7 +13,7 @@ public class FluidConversionTests
 
     public void ConvertingGallonsToLitersIsAccurate(double gallons, double expectedLiters)
     {
-        var result = FluidConversions.ConvertGallonsToLiters(gallons);
+        var result = FluidHelper.ConvertGallonsToLiters(gallons);
 
         Assert.Equal(result, expectedLiters);
     }
@@ -27,7 +27,7 @@ public class FluidConversionTests
 
     public void ConvertingLitersToGallonsIsAccurate(double liters, double expectedGallons)
     {
-        var result = FluidConversions.ConvertLitersToGallons(liters);
+        var result = FluidHelper.ConvertLitersToGallons(liters);
 
         Assert.Equal(result, expectedGallons);
     }

@@ -1,12 +1,10 @@
-using EngineSim.Constants;
-using EngineSim.Electrical;
+using EngineSim.VehicleSystems.Electrical;
 
 namespace EngineSim;
 
 public class Vehicle
 {
     // Components are private: Program.cs talks to the Vehicle, never to a component directly
-    private readonly AmbientConditions _ambientConditions;
     private readonly FuelSystem _fuelSystem;
     private readonly Engine _engine;
     private readonly EngineControlUnit _ecu;
@@ -17,13 +15,11 @@ public class Vehicle
 
     private bool _startKeyHeld;         // set by Program.cs every tick
     private string? _diagnosticMessage; // latest ECU message: a refusal, stall reason or warning, or null
-    public Vehicle(double bore, double stroke, int cylinders, AmbientConditions ambientConditions)
+    // The engine is built outside and handed in, so its specs and air conditions are chosen by the caller
+    public Vehicle(Engine engine)
     {
-        // One shared AmbientConditions, handed to anything that needs the outside air
-        _ambientConditions = ambientConditions;
-
         _fuelSystem = new FuelSystem(80);
-        _engine = new Engine(bore, stroke, cylinders, _ambientConditions, _fuelSystem.Fuel);
+        _engine = engine;
         _ecu = new EngineControlUnit(_fuelSystem.Fuel);
         _battery = new Battery();
         _starter = new Starter();
@@ -51,8 +47,10 @@ public class Vehicle
     public bool SparkOn => _ignitionSystem.SparkOn;
 
     // Engine specs for the startup summary
-    public double BoreMm => _engine.BoreMm;
-    public double StrokeLengthMm => _engine.StrokeLengthMm;
+    public double BoreMm => _engine.Geometry.BoreMm;
+    public double StrokeLengthMm => _engine.Geometry.StrokeLengthMm;
+    public double RodLengthMm => _engine.Geometry.RodLengthMm;
+    public double CompressionRatio => _engine.Geometry.CompressionRatio;
     public int CylinderCount => _engine.CylinderCount;
     public double DisplacementLiters => _engine.DisplacementLiters;
     public double MaxRpm => _engine.MaxRpm;

@@ -54,7 +54,7 @@ public class AirMathTests
     {
         // 83 kPa is roughly Denver. Density, and so torque, scales with pressure: 83 / 101.325 = 0.819
         var thinAir = new AmbientConditions { AirPressureKpa = 83 };
-        var engine = new Engine(95.5, 88.4, 6, thinAir, Fuel);
+        var engine = new Engine(95.5, 88.4, 144.2, 10.3, 6, thinAir, Fuel);
 
         Assert.Equal(FullThrottleTorqueNm * 83 / 101.325, engine.MaxIndicatedTorqueNm, 0.01); // ~294.2 Nm
     }
@@ -166,7 +166,7 @@ public class AirMathTests
     [Fact]
     public void Vehicle_EngineOff_DoesNotDrainTheTank()
     {
-        var vehicle = new Vehicle(95.5, 88.4, 6, new AmbientConditions());
+        var vehicle = new Vehicle(NewEngine());
         vehicle.SwitchBattery();
 
         for (int i = 0; i < 20; i++) // 1 second, never started
@@ -177,7 +177,7 @@ public class AirMathTests
 
     // ---- Helpers ----
 
-    private static Engine NewEngine() => new(95.5, 88.4, 6, new AmbientConditions(), Fuel);
+    private static Engine NewEngine() => new(95.5, 88.4, 144.2, 10.3, 6, new AmbientConditions(), Fuel);
 
     private static Engine RunningEngine(double throttle)
     {
@@ -193,7 +193,7 @@ public class AirMathTests
     // Battery on, start key held for the crank, then released
     private static Vehicle StartedVehicle()
     {
-        var vehicle = new Vehicle(95.5, 88.4, 6, new AmbientConditions());
+        var vehicle = new Vehicle(NewEngine());
         vehicle.SwitchBattery();
         vehicle.SetStartKeyHeld(true);
         // A whole number of ticks past the crank time (comparing float times can land either side)
