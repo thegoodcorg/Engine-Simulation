@@ -35,4 +35,26 @@ public class FuelSystemTests
 
         Assert.Equal(75, fuelSystem.FuelLevelPercentage, precision: 6);
     }
+
+    // ---- Drain (#5) ----
+
+    [Fact]
+    public void Drain_LowersTheLevel()
+    {
+        var fuelSystem = new FuelSystem(tankSizeL: 80);
+
+        fuelSystem.Drain(2.5);
+
+        Assert.Equal(77.5, fuelSystem.FuelLevelL, precision: 6);
+    }
+
+    [Fact]
+    public void Drain_ClampsAtEmpty()
+    {
+        var fuelSystem = new FuelSystem(tankSizeL: 80) { FuelLevelL = 1 };
+
+        fuelSystem.Drain(5);
+
+        Assert.Equal(0, fuelSystem.FuelLevelL);
+    }
 }

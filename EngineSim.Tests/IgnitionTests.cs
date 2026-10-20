@@ -29,14 +29,15 @@ public class IgnitionTests
     [Fact]
     public void Engine_NoSpark_MakesNoTorqueAndSlowsDown()
     {
-        var engine = new Engine(95.5, 88.4, 6, new AmbientConditions());
+        var engine = new Engine(95.5, 88.4, 6, new AmbientConditions(), FuelProperties.PumpGas);
         engine.StartEngine();
         engine.ThrottlePosition = 1;
+        double fuelPerCycleKg = engine.AirMassPerCycleKg / FuelProperties.PumpGas.StoichiometricAfr;
         for (int i = 0; i < 10; i++)
-            engine.Update(Dt, sparkOn: true, idleFloorRpm: 0); // get some speed up
+            engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, fuelPerCycleKg); // get some speed up
         double rpmBefore = engine.EngineSpeed;
 
-        engine.Update(Dt, sparkOn: false, idleFloorRpm: 0);
+        engine.Update(Dt, sparkOn: false, idleFloorRpm: 0, fuelPerCycleKg);
 
         Assert.Equal(0, engine.EngineTorqueNm);
         Assert.True(engine.EngineSpeed < rpmBefore);

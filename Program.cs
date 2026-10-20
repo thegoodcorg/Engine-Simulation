@@ -12,7 +12,7 @@ Console.WriteLine("Engine built!");
 Console.WriteLine($"Cyl bore = {testVehicle.BoreMm}mm / Cyl stroke = {testVehicle.StrokeLengthMm}mm / Cyl count = {testVehicle.CylinderCount}");
 Console.WriteLine($"Displacement = {testVehicle.DisplacementLiters:F2} L");
 Console.WriteLine($"Redline = {testVehicle.MaxRpm} RPM");
-Console.WriteLine($"Torque = {testVehicle.PeakTorqueNm}Nm");
+Console.WriteLine($"Peak torque = {testVehicle.PeakTorqueNm:F0} Nm");
 
 Console.WriteLine();
 Console.WriteLine("1 = battery on/off, hold 3 = start engine, 4 = stop engine, W = throttle up, S = throttle down, Q = quit");
@@ -51,7 +51,7 @@ while (running)
     testVehicle.Update(dt);
 
     // \r returns to the start of the line so the display updates in place
-    Console.Write($"\rthrottle={testVehicle.ThrottlePosition * 100,3:F0}%  rpm={testVehicle.Rpm,5:F0}  | Bat = {testVehicle.BatteryVoltage,-8} | {testVehicle.EngineStatus,-40}");
+    Console.Write($"\rthrottle={testVehicle.ThrottlePosition * 100,3:F0}%  rpm={testVehicle.Rpm,5:F0}  torque={testVehicle.EngineTorqueNm,3:F0}Nm  | Bat = {testVehicle.BatteryVoltage,-8} | {testVehicle.EngineStatus,-40}");
 
     // Empty tank ends the sim. A battery stall doesn't, so you can reconnect and restart.
     if (testVehicle.OutOfFuel)

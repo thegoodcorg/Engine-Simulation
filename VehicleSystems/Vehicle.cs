@@ -7,13 +7,11 @@ public class Vehicle
 {
     // Components are private: Program.cs talks to the Vehicle, never to a component directly
     private readonly AmbientConditions _ambientConditions;
+    private readonly FuelSystem _fuelSystem;
     private readonly Engine _engine;
     private readonly EngineControlUnit _ecu;
-    private readonly FuelSystem _fuelSystem;
-
     // electrical components
     private readonly Battery _battery;
-
     private readonly Starter _starter;
     private readonly IgnitionSystem _ignitionSystem;
 
@@ -24,9 +22,9 @@ public class Vehicle
         // One shared AmbientConditions, handed to anything that needs the outside air
         _ambientConditions = ambientConditions;
 
-        _engine = new Engine(bore, stroke, cylinders, _ambientConditions);
-        _ecu = new EngineControlUnit();
         _fuelSystem = new FuelSystem(80);
+        _engine = new Engine(bore, stroke, cylinders, _ambientConditions, _fuelSystem.Fuel);
+        _ecu = new EngineControlUnit(_fuelSystem.Fuel);
         _battery = new Battery();
         _starter = new Starter();
         _ignitionSystem = new IgnitionSystem();
@@ -34,6 +32,7 @@ public class Vehicle
 
     // ---- Values for Program.cs to display (read-only) ----
     public double Rpm => _engine.EngineSpeed;
+    public double EngineTorqueNm => _engine.EngineTorqueNm; // torque from combustion, before friction
     public double ThrottlePosition => _engine.ThrottlePosition;
     public double FuelLevelL => _fuelSystem.FuelLevelL;
     public bool IsRunning => _engine.IsRunning;
@@ -78,7 +77,10 @@ public class Vehicle
             UpdateStarter(dt, ecu);
         }
 
-        _engine.Update(dt, _ignitionSystem.SparkOn, ecu.IdleFloorRpm);
+        _engine.Update(dt, _ignitionSystem.SparkOn, ecu.IdleFloorRpm, ecu.FuelPerCycleKg);
+
+        // Drain what the engine used, converted from kg to liters
+        _fuelSystem.Drain(_engine.FuelBurnedKg / _fuelSystem.Fuel.DensityKgPerL);
     }
 
     // Snapshot of everything the ECU reads this tick
@@ -90,7 +92,8 @@ public class Vehicle
             BatteryConnected: _battery.IsBatteryConnected,
             FuelLevelPercentage: _fuelSystem.FuelLevelPercentage,
             EngineRunning: _engine.IsRunning,
-            Cranking: _starter.StarterEngaged);
+            Cranking: _starter.StarterEngaged,
+            MafKgPerS: _engine.AirflowKgPerS);
     }
 
     public void SwitchBattery()
