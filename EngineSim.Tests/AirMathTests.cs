@@ -36,7 +36,17 @@ public class AirMathTests
         engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, StoichFuel(engine));
 
         Assert.Equal(FullThrottleTorqueNm, engine.EngineTorqueNm, 0.01);
-        Assert.Equal(FullThrottleTorqueNm, engine.MaxTorqueNm, 0.01);
+        Assert.Equal(FullThrottleTorqueNm, engine.MaxIndicatedTorqueNm, 0.01);
+    }
+
+    [Fact]
+    public void PeakTorque_AtTheCrank_IsIndicatedMinusFriction()
+    {
+        var engine = NewEngine();
+
+        // 359.18 Nm from combustion − 36.28 Nm friction (1.2 bar FMEP) = 322.9 Nm at the crank
+        Assert.Equal(FullThrottleTorqueNm - engine.FrictionTorque, engine.MaxBrakeTorqueNm, 0.01);
+        Assert.Equal(322.9, engine.MaxBrakeTorqueNm, 0.1);
     }
 
     [Fact]
@@ -46,7 +56,7 @@ public class AirMathTests
         var thinAir = new AmbientConditions { AirPressureKpa = 83 };
         var engine = new Engine(95.5, 88.4, 6, thinAir, Fuel);
 
-        Assert.Equal(FullThrottleTorqueNm * 83 / 101.325, engine.MaxTorqueNm, 0.01); // ~294.2 Nm
+        Assert.Equal(FullThrottleTorqueNm * 83 / 101.325, engine.MaxIndicatedTorqueNm, 0.01); // ~294.2 Nm
     }
 
     [Fact]
@@ -124,19 +134,10 @@ public class AirMathTests
         Assert.Equal(Engine.FuelUsedG(fuelPerCycleG, rpm, Dt), engine.FuelBurnedG, 1e-9);
     }
 
+    // Whether to inject is the ECU's decision (see EngineControlUnitTests: Fuel_CutWith...).
+    // The engine uses whatever it's given, so a stopped crank uses nothing even if fuel is sent.
     [Fact]
-    public void NoSpark_BurnsNoFuel()
-    {
-        var engine = RunningEngine(throttle: 1);
-        engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, StoichFuel(engine)); // get the crank turning
-
-        engine.Update(Dt, sparkOn: false, idleFloorRpm: 0, StoichFuel(engine));
-
-        Assert.Equal(0, engine.FuelBurnedG);
-    }
-
-    [Fact]
-    public void EngineOff_BurnsNoFuel()
+    public void EngineOff_MakesNoTorqueAndUsesNoFuel()
     {
         var engine = NewEngine(); // never started
         engine.ThrottlePosition = 1;
@@ -195,7 +196,9 @@ public class AirMathTests
         var vehicle = new Vehicle(95.5, 88.4, 6, new AmbientConditions());
         vehicle.SwitchBattery();
         vehicle.SetStartKeyHeld(true);
-        for (int i = 0; i * Dt <= Engine.CrankTimeSeconds + Dt; i++)
+        // A whole number of ticks past the crank time (comparing float times can land either side)
+        int crankTicks = (int)Math.Ceiling(Engine.CrankTimeSeconds / Dt) + 1;
+        for (int i = 0; i < crankTicks; i++)
             vehicle.Update(Dt);
         vehicle.SetStartKeyHeld(false);
         vehicle.Update(Dt);

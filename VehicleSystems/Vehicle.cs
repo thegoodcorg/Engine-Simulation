@@ -32,7 +32,7 @@ public class Vehicle
 
     // ---- Values for Program.cs to display (read-only) ----
     public double Rpm => _engine.EngineSpeed;
-    public double EngineTorqueNm => _engine.EngineTorqueNm; // torque from combustion, before friction
+    public double TorqueNm => _engine.NetTorque;              // torque at the crank, after friction (negative while the idle floor holds RPM up)
     public double MafGPerS => _engine.AirflowGPerS;           // mass airflow, as an OBD2 reader shows it
     public double ThrottlePosition => _engine.ThrottlePosition;
     public double FuelLevelL => _fuelSystem.FuelLevelL;
@@ -56,7 +56,7 @@ public class Vehicle
     public int CylinderCount => _engine.CylinderCount;
     public double DisplacementLiters => _engine.DisplacementLiters;
     public double MaxRpm => _engine.MaxRpm;
-    public double PeakTorqueNm => _engine.MaxTorqueNm;
+    public double PeakTorqueNm => _engine.MaxBrakeTorqueNm; // at the crank, after friction
 
     public void Update(double dt)
     {

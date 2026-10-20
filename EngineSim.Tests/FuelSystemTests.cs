@@ -57,4 +57,13 @@ public class FuelSystemTests
 
         Assert.Equal(0, fuelSystem.FuelLevelL);
     }
+
+    [Fact]
+    public void Drain_NegativeAmount_IsRefused()
+    {
+        var fuelSystem = new FuelSystem(tankSizeL: 80) { FuelLevelL = 40 };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => fuelSystem.Drain(-1));
+        Assert.Equal(40, fuelSystem.FuelLevelL); // unchanged
+    }
 }

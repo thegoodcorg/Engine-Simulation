@@ -40,7 +40,10 @@ public class Engine
     public double AirflowGPerS => AirMassPerCycleG * EngineSpeed / 120;
 
     // Torque at full throttle with a stoichiometric mix, in today's air. Changes with ambient conditions.
-    public double MaxTorqueNm => TorqueFromFuelNm(AirMassG(1.0) / _fuel.StoichiometricAfr);
+    // Indicated = what combustion makes, before friction. Brake = what reaches the crank, after friction
+    // (the figure a manufacturer quotes as peak torque).
+    public double MaxIndicatedTorqueNm => TorqueFromFuelNm(AirMassG(1.0) / _fuel.StoichiometricAfr);
+    public double MaxBrakeTorqueNm => MaxIndicatedTorqueNm - FrictionTorque;
 
     // MinThrottle = released, 1.0 = wide open. Values outside that range get clamped.
     private double _throttlePosition = MinThrottle;
@@ -50,7 +53,6 @@ public class Engine
         set => _throttlePosition = Math.Clamp(value, MinThrottle, 1.0);
     }
 
-    // fuel defaults to gasoline when not given
     public Engine(double bore, double stroke, int cylinders, AmbientConditions ambientConditions, FuelProperties fuel)
     {
         BoreMm = bore;
@@ -63,7 +65,7 @@ public class Engine
         FrictionTorque = PressureToTorqueNm(FmepBar);
         Inertia = InertiaPerLiter * DisplacementLiters;
         _ambientConditions = ambientConditions;
-        _fuel = fuel ?? FuelProperties.PumpGas;
+        _fuel = fuel;
     }
     public void StartEngine()
     {
@@ -92,9 +94,9 @@ public class Engine
         double burnableFuelG = Math.Min(fuelPerCycleG, AirMassPerCycleG / _fuel.StoichiometricAfr);
         EngineTorqueNm = combusting ? TorqueFromFuelNm(burnableFuelG) : 0;
 
-        // Everything injected is used up, burned or not. No fuel while not combusting
-        // (off, cranking, or spark cut by the rev limiter).
-        FuelBurnedG = combusting ? FuelUsedG(fuelPerCycleG, EngineSpeed, dt) : 0;
+        // Everything injected is used up, burned or not. Whether to inject at all is the ECU's
+        // decision (it cuts fuel with the spark), so the engine just uses what it's given.
+        FuelBurnedG = FuelUsedG(fuelPerCycleG, EngineSpeed, dt);
 
         double friction = EngineSpeed > 0 ? FrictionTorque : 0;
 

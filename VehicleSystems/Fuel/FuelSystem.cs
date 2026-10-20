@@ -16,8 +16,10 @@ public class FuelSystem
     }
 
     // Take fuel out of the tank. The level never goes below empty.
+    // A negative amount would secretly add fuel, so it's refused.
     public void Drain(double liters)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(liters);
         FuelLevelL = Math.Max(FuelLevelL - liters, 0);
     }
 }

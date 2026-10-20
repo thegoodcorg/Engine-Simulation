@@ -43,7 +43,6 @@ public class EngineControlUnit
     // The fuel this ECU is calibrated for. Data only, not a reference to the fuel system.
     private readonly FuelProperties _fuel;
 
-    // fuel defaults to gasoline when not given
     public EngineControlUnit(FuelProperties fuel)
     {
         _fuel = fuel;
@@ -56,15 +55,18 @@ public class EngineControlUnit
         RunCheckResult check = CheckCanRun(inputs.BatteryConnected, inputs.FuelLevelPercentage);
         bool sparkOn = DecideSpark(inputs);
         double idleFloor = UpdateIdleFloor(dt);
-        double fuelPerCycle = DecideFuel(inputs);
+        double fuelPerCycle = DecideFuel(inputs, sparkOn);
 
         return new EcuOutputs(check.Allowed, sparkOn, idleFloor, fuelPerCycle, check.Message);
     }
 
     // Fuel (#5): air per cycle from the MAF reading, ÷ target air-fuel ratio.
     // MAF reads per second, so divide by cycles per second (RPM / 120) to get per cycle.
-    private double DecideFuel(EcuInputs inputs)
+    private double DecideFuel(EcuInputs inputs, bool sparkOn)
     {
+        if (!sparkOn)
+            return 0; // fuel cut with the spark: engine off, no battery, or rev limiter
+
         if (inputs.Rpm < MinRpmForFuel)
             return 0; // stopped or barely turning: no meaningful reading, and avoids dividing by 0
 

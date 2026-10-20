@@ -202,4 +202,35 @@ public class EngineControlUnitTests
 
         Assert.Equal(0, outputs.FuelPerCycleG);
     }
+
+    [Fact]
+    public void Fuel_CutWithSparkAtTheRevLimiter()
+    {
+        var ecu = new EngineControlUnit(FuelProperties.PumpGas);
+
+        EcuOutputs outputs = ecu.Update(Dt, Inputs(rpm: MaxRpm, mafGPerS: 200));
+
+        Assert.False(outputs.SparkOn);
+        Assert.Equal(0, outputs.FuelPerCycleG);
+    }
+
+    [Fact]
+    public void Fuel_CutWhenEngineOffAndNotCranking()
+    {
+        var ecu = new EngineControlUnit(FuelProperties.PumpGas);
+
+        EcuOutputs outputs = ecu.Update(Dt, Inputs(rpm: 700, engineRunning: false, mafGPerS: 4));
+
+        Assert.Equal(0, outputs.FuelPerCycleG);
+    }
+
+    [Fact]
+    public void Fuel_CutWithoutBattery()
+    {
+        var ecu = new EngineControlUnit(FuelProperties.PumpGas);
+
+        EcuOutputs outputs = ecu.Update(Dt, Inputs(rpm: 3000, batteryConnected: false, mafGPerS: 100));
+
+        Assert.Equal(0, outputs.FuelPerCycleG);
+    }
 }

@@ -88,7 +88,9 @@ public class IgnitionTests
         var vehicle = new Vehicle(95.5, 88.4, 6, new AmbientConditions());
         vehicle.SwitchBattery();
         vehicle.SetStartKeyHeld(true);
-        for (int i = 0; i * Dt <= Engine.CrankTimeSeconds + Dt; i++)
+        // A whole number of ticks past the crank time (comparing float times can land either side)
+        int crankTicks = (int)Math.Ceiling(Engine.CrankTimeSeconds / Dt) + 1;
+        for (int i = 0; i < crankTicks; i++)
             vehicle.Update(Dt);
         vehicle.SetStartKeyHeld(false);
         vehicle.Update(Dt);
