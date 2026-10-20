@@ -65,7 +65,7 @@ public class Engine
         // Built first: displacement and redline below read from it
         Geometry = new CylinderGeometry(boreMm, strokeMm, conRodLengthMm, compressionRatio);
         CylinderCount = cylinders;
-        CylinderVolumeLiters = CalculateCylinderVolumeLiters();
+        CylinderVolumeLiters = Geometry.SweptVolumeCc / 1000; // cc → liters
         DisplacementLiters = TotalDisplacement();
         MaxRpm = CalculateRedline();
         EngineSpeed = 0; // starts switched off
@@ -123,15 +123,9 @@ public class Engine
         EngineSpeed = Math.Clamp(EngineSpeed, floor, MaxRpm);
     }
 
-    // Volume swept by one piston: π/4 × bore² × stroke, converted from mm³ to liters
-    private double CalculateCylinderVolumeLiters()
-    {
-        return Math.PI / 4 * Math.Pow(Geometry.BoreMm, 2) * Geometry.StrokeLengthMm / 1_000_000;
-    }
-
     private double TotalDisplacement()
     {
-        return CalculateCylinderVolumeLiters() * CylinderCount;
+        return CylinderVolumeLiters * CylinderCount;
     }
 
     private double CalculateRedline() // TODO: this will eventually die for a better simulation of the redline
