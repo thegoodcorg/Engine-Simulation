@@ -14,9 +14,9 @@ public class EngineControlUnitTests
         double fuelLevelPercentage = 100,
         bool engineRunning = true,
         bool cranking = false,
-        double mafKgPerS = 0)
+        double mafGPerS = 0)
     {
-        return new EcuInputs(rpm, MaxRpm, batteryConnected, fuelLevelPercentage, engineRunning, cranking, mafKgPerS);
+        return new EcuInputs(rpm, MaxRpm, batteryConnected, fuelLevelPercentage, engineRunning, cranking, mafGPerS);
     }
 
     // ---- Run checks ----
@@ -182,13 +182,13 @@ public class EngineControlUnitTests
     public void Fuel_FromMafReading_IsAirPerCycleOverStoichiometricAfr(double rpm)
     {
         var ecu = new EngineControlUnit(FuelProperties.PumpGas);
-        const double airPerCycleKg = 0.004189; // full throttle on a standard day
-        double mafKgPerS = airPerCycleKg * rpm / 120; // what the MAF reads at this RPM
+        const double airPerCycleG = 4.189; // full throttle on a standard day
+        double mafGPerS = airPerCycleG * rpm / 120; // what the MAF reads at this RPM (g/s)
 
-        EcuOutputs outputs = ecu.Update(Dt, Inputs(rpm: rpm, mafKgPerS: mafKgPerS));
+        EcuOutputs outputs = ecu.Update(Dt, Inputs(rpm: rpm, mafGPerS: mafGPerS));
 
         // The ECU turns the per-second reading back into per-cycle air, then divides by 14.7
-        Assert.Equal(airPerCycleKg / 14.7, outputs.FuelPerCycleKg, 1e-12);
+        Assert.Equal(airPerCycleG / 14.7, outputs.FuelPerCycleG, 1e-9);
     }
 
     [Theory]
@@ -198,8 +198,8 @@ public class EngineControlUnitTests
     {
         var ecu = new EngineControlUnit(FuelProperties.PumpGas);
 
-        EcuOutputs outputs = ecu.Update(Dt, Inputs(rpm: rpm, mafKgPerS: 0.001));
+        EcuOutputs outputs = ecu.Update(Dt, Inputs(rpm: rpm, mafGPerS: 1.0));
 
-        Assert.Equal(0, outputs.FuelPerCycleKg);
+        Assert.Equal(0, outputs.FuelPerCycleG);
     }
 }

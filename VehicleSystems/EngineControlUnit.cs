@@ -12,12 +12,12 @@ public record EcuInputs(
     double FuelLevelPercentage,
     bool EngineRunning,
     bool Cranking,
-    double MafKgPerS);           // mass airflow (MAF) reading: air entering per second
+    double MafGPerS);            // mass airflow (MAF) reading: grams of air entering per second, as an OBD2 reader shows it
 
 // Everything the ECU decides in one tick. The Vehicle applies these to the components.
 // AllowRun + Message come from the run check, SparkOn goes to the ignition,
-// IdleFloorRpm and FuelPerCycleKg to the engine.
-public record EcuOutputs(bool AllowRun, bool SparkOn, double IdleFloorRpm, double FuelPerCycleKg, string? Message);
+// IdleFloorRpm and FuelPerCycleG to the engine.
+public record EcuOutputs(bool AllowRun, bool SparkOn, double IdleFloorRpm, double FuelPerCycleG, string? Message);
 
 // Every control decision lives here. The ECU holds NO references to other systems:
 // the Vehicle passes in the facts as parameters, and the ECU returns decisions.
@@ -68,8 +68,8 @@ public class EngineControlUnit
         if (inputs.Rpm < MinRpmForFuel)
             return 0; // stopped or barely turning: no meaningful reading, and avoids dividing by 0
 
-        double airPerCycleKg = inputs.MafKgPerS / (inputs.Rpm / 120);
-        return airPerCycleKg / TargetAfr();
+        double airPerCycleG = inputs.MafGPerS / (inputs.Rpm / 120);
+        return airPerCycleG / TargetAfr();
     }
 
     // The air-fuel ratio to run at. Always stoichiometric for now;

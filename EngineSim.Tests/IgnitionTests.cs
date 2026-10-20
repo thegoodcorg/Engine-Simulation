@@ -32,12 +32,12 @@ public class IgnitionTests
         var engine = new Engine(95.5, 88.4, 6, new AmbientConditions(), FuelProperties.PumpGas);
         engine.StartEngine();
         engine.ThrottlePosition = 1;
-        double fuelPerCycleKg = engine.AirMassPerCycleKg / FuelProperties.PumpGas.StoichiometricAfr;
+        double fuelPerCycleG = engine.AirMassPerCycleG / FuelProperties.PumpGas.StoichiometricAfr;
         for (int i = 0; i < 10; i++)
-            engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, fuelPerCycleKg); // get some speed up
+            engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, fuelPerCycleG); // get some speed up
         double rpmBefore = engine.EngineSpeed;
 
-        engine.Update(Dt, sparkOn: false, idleFloorRpm: 0, fuelPerCycleKg);
+        engine.Update(Dt, sparkOn: false, idleFloorRpm: 0, fuelPerCycleG);
 
         Assert.Equal(0, engine.EngineTorqueNm);
         Assert.True(engine.EngineSpeed < rpmBefore);

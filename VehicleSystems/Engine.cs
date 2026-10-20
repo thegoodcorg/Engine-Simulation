@@ -25,19 +25,22 @@ public class Engine
     public double NetTorque { get; private set; }
     public double Inertia { get; }
     public bool IsRunning { get; private set; }
-    public double FuelBurnedKg { get; private set; } // fuel used in the last Update, for the Vehicle to drain from the tank
+    public double FuelBurnedG { get; private set; } // fuel used in the last Update (g), for the Vehicle to drain from the tank
     private readonly AmbientConditions _ambientConditions;
     private readonly FuelProperties _fuel;
 
-    // Air the cylinders really take in per cycle (kg): VE × air density × displacement (m³) × throttle
-    public double AirMassPerCycleKg => AirMassKg(ThrottlePosition);
+    // Air and fuel are in grams, the way an OBD2 reader shows MAF (g/s).
+    // They're converted to kg only where the physics needs it (energy per kg, density in kg/L).
 
-    // Air flowing in per second (kg/s): air per cycle × cycles per second (RPM / 120).
+    // Air the cylinders really take in per cycle (g): VE × air density × displacement (m³) × throttle
+    public double AirMassPerCycleG => AirMassG(ThrottlePosition);
+
+    // Air flowing in per second (g/s): air per cycle × cycles per second (RPM / 120).
     // This is what a MAF sensor reads; the Vehicle passes it to the ECU.
-    public double AirflowKgPerS => AirMassPerCycleKg * EngineSpeed / 120;
+    public double AirflowGPerS => AirMassPerCycleG * EngineSpeed / 120;
 
     // Torque at full throttle with a stoichiometric mix, in today's air. Changes with ambient conditions.
-    public double MaxTorqueNm => TorqueFromFuelNm(AirMassKg(1.0) / _fuel.StoichiometricAfr);
+    public double MaxTorqueNm => TorqueFromFuelNm(AirMassG(1.0) / _fuel.StoichiometricAfr);
 
     // MinThrottle = released, 1.0 = wide open. Values outside that range get clamped.
     private double _throttlePosition = MinThrottle;
@@ -79,19 +82,19 @@ public class Engine
         IsRunning = false;
     }
 
-    // Advance the engine by dt seconds. fuelPerCycleKg is what the ECU decided to inject.
-    public void Update(double dt, bool sparkOn, double idleFloorRpm, double fuelPerCycleKg)
+    // Advance the engine by dt seconds. fuelPerCycleG is what the ECU decided to inject.
+    public void Update(double dt, bool sparkOn, double idleFloorRpm, double fuelPerCycleG)
     {
         bool combusting = IsRunning && sparkOn;
 
         // 1. Torque from the fuel that burns, minus what friction takes away.
         //    Fuel needs air to burn: in a rich mix the extra fuel goes out unburned, so the air sets a cap.
-        double burnableFuelKg = Math.Min(fuelPerCycleKg, AirMassPerCycleKg / _fuel.StoichiometricAfr);
-        EngineTorqueNm = combusting ? TorqueFromFuelNm(burnableFuelKg) : 0;
+        double burnableFuelG = Math.Min(fuelPerCycleG, AirMassPerCycleG / _fuel.StoichiometricAfr);
+        EngineTorqueNm = combusting ? TorqueFromFuelNm(burnableFuelG) : 0;
 
         // Everything injected is used up, burned or not. No fuel while not combusting
         // (off, cranking, or spark cut by the rev limiter).
-        FuelBurnedKg = combusting ? FuelUsedKg(fuelPerCycleKg, EngineSpeed, dt) : 0;
+        FuelBurnedG = combusting ? FuelUsedG(fuelPerCycleG, EngineSpeed, dt) : 0;
 
         double friction = EngineSpeed > 0 ? FrictionTorque : 0;
 
@@ -131,24 +134,25 @@ public class Engine
 
     // Fuel used over dt seconds: fuel per cycle × cycles per second × dt.
     // A 4-stroke completes one cycle every 2 revolutions, so cycles per second = RPM / 60 / 2 = RPM / 120.
-    public static double FuelUsedKg(double fuelPerCycleKg, double rpm, double dt)
+    public static double FuelUsedG(double fuelPerCycleG, double rpm, double dt)
     {
-        return fuelPerCycleKg * rpm / 120 * dt;
+        return fuelPerCycleG * rpm / 120 * dt;
     }
 
-    // Air taken in per cycle at a given throttle: VE × air density (kg/m³) × displacement (m³) × throttle
-    private double AirMassKg(double throttle)
+    // Air taken in per cycle at a given throttle: VE × air density (kg/m³) × displacement (m³) × throttle,
+    // then × 1000 to turn kg into g
+    private double AirMassG(double throttle)
     {
         double displacementInMCubed = DisplacementLiters / 1000;
 
-        return VolumetricEfficiency * _ambientConditions.AirDensityKgM3 * displacementInMCubed * throttle;
+        return VolumetricEfficiency * _ambientConditions.AirDensityKgM3 * displacementInMCubed * throttle * 1000;
     }
 
     // Torque from burning fuel: energy (J) × thermal efficiency = work per cycle, then ÷ 4π
-    // because a cycle is 2 revolutions = 4π radians
-    private double TorqueFromFuelNm(double fuelKg)
+    // because a cycle is 2 revolutions = 4π radians. Energy content is per kg, so grams ÷ 1000 first.
+    private double TorqueFromFuelNm(double fuelG)
     {
-        double energyJ = fuelKg * _fuel.EnergyContentJPerKg;
+        double energyJ = fuelG / 1000 * _fuel.EnergyContentJPerKg;
         double workJ = energyJ * ThermalEfficiency;
 
         return workJ / (4 * Math.PI);

@@ -33,6 +33,7 @@ public class Vehicle
     // ---- Values for Program.cs to display (read-only) ----
     public double Rpm => _engine.EngineSpeed;
     public double EngineTorqueNm => _engine.EngineTorqueNm; // torque from combustion, before friction
+    public double MafGPerS => _engine.AirflowGPerS;           // mass airflow, as an OBD2 reader shows it
     public double ThrottlePosition => _engine.ThrottlePosition;
     public double FuelLevelL => _fuelSystem.FuelLevelL;
     public bool IsRunning => _engine.IsRunning;
@@ -77,10 +78,10 @@ public class Vehicle
             UpdateStarter(dt, ecu);
         }
 
-        _engine.Update(dt, _ignitionSystem.SparkOn, ecu.IdleFloorRpm, ecu.FuelPerCycleKg);
+        _engine.Update(dt, _ignitionSystem.SparkOn, ecu.IdleFloorRpm, ecu.FuelPerCycleG);
 
-        // Drain what the engine used, converted from kg to liters
-        _fuelSystem.Drain(_engine.FuelBurnedKg / _fuelSystem.Fuel.DensityKgPerL);
+        // Drain what the engine used: grams ÷ 1000 = kg, then ÷ density (kg/L) = liters
+        _fuelSystem.Drain(_engine.FuelBurnedG / 1000 / _fuelSystem.Fuel.DensityKgPerL);
     }
 
     // Snapshot of everything the ECU reads this tick
@@ -93,7 +94,7 @@ public class Vehicle
             FuelLevelPercentage: _fuelSystem.FuelLevelPercentage,
             EngineRunning: _engine.IsRunning,
             Cranking: _starter.StarterEngaged,
-            MafKgPerS: _engine.AirflowKgPerS);
+            MafGPerS: _engine.AirflowGPerS);
     }
 
     public void SwitchBattery()
