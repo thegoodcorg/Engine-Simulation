@@ -13,6 +13,7 @@ public class Engine
     public const double CrankTimeSeconds = 0.5;
     public const double VolumetricEfficiency = 0.9;      // the cylinders only fill to 90% of their volume
     public const double ThermalEfficiency = 0.36;        // share of the fuel's energy that pushes the pistons (indicated, so friction isn't counted twice)
+    public const double CrankStepDeg = 0.5;             // crank angle per simulation step for the cylinder model
 
     public int CylinderCount { get; }
     public double CylinderVolumeLiters { get; }
