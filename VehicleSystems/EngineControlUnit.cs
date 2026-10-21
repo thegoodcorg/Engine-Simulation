@@ -17,7 +17,7 @@ public record EcuInputs(
 // Everything the ECU decides in one tick. The Vehicle applies these to the components.
 // AllowRun + Message come from the run check, SparkOn goes to the ignition,
 // IdleFloorRpm and FuelPerCycleG to the engine.
-public record EcuOutputs(bool AllowRun, bool SparkOn, double IdleFloorRpm, double FuelPerCycleG, string? Message);
+public record EcuOutputs(bool AllowRun, bool SparkOn, double IdleFloorRpm, double FuelPerCycleG, double SparkAdvanceDeg, string? Message);
 
 // Every control decision lives here. The ECU holds NO references to other systems:
 // the Vehicle passes in the facts as parameters, and the ECU returns decisions.
@@ -57,7 +57,7 @@ public class EngineControlUnit
         double idleFloor = UpdateIdleFloor(dt);
         double fuelPerCycle = DecideFuel(inputs, sparkOn);
 
-        return new EcuOutputs(check.Allowed, sparkOn, idleFloor, fuelPerCycle, check.Message);
+        return new EcuOutputs(check.Allowed, sparkOn, idleFloor, fuelPerCycle, 20, check.Message);
     }
 
     // Fuel (#5): air per cycle from the MAF reading, ÷ target air-fuel ratio.
