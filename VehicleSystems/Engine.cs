@@ -18,6 +18,8 @@ public class Engine
     public const double WiebeM = 2;                      // burn shape: slow start while the flame kernel grows, fast middle, long tail as it reaches the walls
     public const double BurnDurationDeg = 50;
     public const double CombustionEfficiency = 0.98;
+    public const double WallTempK = 450;                    // fixed, will replace later once cooling code comes into play.
+
     public int CylinderCount { get; }
     public double CylinderVolumeLiters { get; }
     public double DisplacementLiters { get; }
