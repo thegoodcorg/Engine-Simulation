@@ -7,6 +7,7 @@ public class Cylinder
     private readonly CylinderGeometry _cylinderGeometry;
     private readonly GasProperties _gasProperties;
     private readonly Combustion? _combustion;
+    private readonly HeatTransfer? _heatTransfer;
 
     public double AirMassG { get; }
     private double AirMassKg => AirMassG / 1000; // R and cv are per kg, so the physics uses kg
@@ -14,12 +15,14 @@ public class Cylinder
     public double CrankAngleDeg { get; private set; }
     public double WorkJ { get; private set; }
     public double HeatReleasedJ { get; private set; }
+    public double HeatLostJ { get; private set; }   // heat lost to the walls so far
+    public double Rpm { get; set; }                 // crank speed, set from outside: heat loss depends on how long each step takes
     public double InternalEnergyJ => AirMassKg * _gasProperties.CvJPerKgK * TempK;
-    public double VolumeM3 => _cylinderGeometry.Volume(CrankAngleDeg) * 1e-6;
+    public double VolumeM3 => VolumeHelper.CcToCubicMeters(_cylinderGeometry.Volume(CrankAngleDeg));
     public double PressurePa => AirMassKg * _gasProperties.GasConstantJPerKgK * TempK / VolumeM3;
 
     // Fill the cylinder at crankAngleDeg with gas at the given pressure and temperature, then seal it
-    public Cylinder(CylinderGeometry geometry, GasProperties gas, double crankAngleDeg, double pressurePa, double temperatureK, Combustion? combustion = null)
+    public Cylinder(CylinderGeometry geometry, GasProperties gas, double crankAngleDeg, double pressurePa, double temperatureK, Combustion? combustion = null, HeatTransfer? heatTransfer = null)
     {
         _cylinderGeometry = geometry;
         _gasProperties = gas;
@@ -28,6 +31,10 @@ public class Cylinder
         // Ideal gas law again, solved for mass: m = p·V / (R·T) gives kg, × 1000 for grams
         AirMassG = pressurePa * VolumeM3 / (gas.GasConstantJPerKgK * temperatureK) * 1000;
         _combustion = combustion;
+        _heatTransfer = heatTransfer;
+
+        // Woschni needs the gas's state at the moment the valves shut: this one
+        _heatTransfer?.CaptureReferenceState(pressurePa, VolumeM3, temperatureK);
     }
 
     // Turn the crank by stepDeg degrees, updating temperature and work (RK4)
@@ -36,6 +43,7 @@ public class Cylinder
         double h = DegreeHelper.ToRadians(stepDeg);
         double theta = CrankAngleDeg;
         double t = TempK;
+        double startPressure = PressurePa;
 
         // Four slope samples across the step: start, middle (twice), end
         var (dT1, dW1) = Slopes(theta, t);
@@ -53,6 +61,18 @@ public class Cylinder
             TempK += heatJ / (AirMassKg * _gasProperties.CvJPerKgK);
             HeatReleasedJ += heatJ;
         }
+
+        // Heat leaking into the walls during this step cools the gas: ΔT = heat / (m·cv)
+        if (_heatTransfer != null)
+        {
+            if (Rpm <= 0)
+                throw new InvalidOperationException("Set Rpm before stepping a cylinder with heat transfer: heat loss depends on how long each step takes.");
+
+            bool afterSpark = _combustion != null && theta >= _combustion.BurnStartDeg;
+            double heatLossJ = _heatTransfer.HeatLossJ(theta, startPressure, t, Rpm, stepDeg, afterSpark);
+            TempK -= heatLossJ / (AirMassKg * _gasProperties.CvJPerKgK);
+            HeatLostJ += heatLossJ;
+        }
     }
 
     // Run one sealed cycle from here (expects BDC, 540°) through firing TDC and back to BDC. Returns indicated work (J).
@@ -67,8 +87,8 @@ public class Cylinder
     // How fast temperature and work change per radian of crank, at angle thetaDeg and temperature t
     private (double dTdTheta, double dWdTheta) Slopes(double thetaDeg, double t)
     {
-        double v = _cylinderGeometry.Volume(thetaDeg) * 1e-6;     // m³
-        double dV = _cylinderGeometry.DVdTheta(thetaDeg) * 1e-6;  // m³ per radian
+        double v = VolumeHelper.CcToCubicMeters(_cylinderGeometry.Volume(thetaDeg));      // m³
+        double dV = VolumeHelper.CcToCubicMeters(_cylinderGeometry.DVdTheta(thetaDeg));  // m³ per radian
         double p = AirMassKg * _gasProperties.GasConstantJPerKgK * t / v;
 
         // Energy balance with no heat: m·cv·dT = −p·dV
