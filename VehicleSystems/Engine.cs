@@ -18,6 +18,7 @@ public class Engine
     public const double WiebeM = 2;                      // burn shape: slow start while the flame kernel grows, fast middle, long tail as it reaches the walls
     public const double BurnDurationDeg = 50;
     public const double CombustionEfficiency = 0.98;
+    public const double ExhaustBackPressureAboveAmbientPa = 5_000; // exhaust system back-pressure: exhaust port = ambient + 5 kPa
     public const double WallTempK = 450;                    // fixed, will replace later once cooling code comes into play.
 
     public int CylinderCount { get; }
@@ -38,7 +39,7 @@ public class Engine
     // They're converted to kg only where the physics needs it (energy per kg, density in kg/L).
 
     // Air the cylinders really take in per cycle (g): VE × air density × displacement (m³) × throttle
-    public double AirMassPerCycleG => GasMassG(ThrottlePosition);
+    public double AirMassPerCycleG => AirMassG(ThrottlePosition);
 
     // Air flowing in per second (g/s): air per cycle × cycles per second (RPM / 120).
     // This is what a MAF sensor reads; the Vehicle passes it to the ECU.
@@ -47,7 +48,7 @@ public class Engine
     // Torque at full throttle with a stoichiometric mix, in today's air. Changes with ambient conditions.
     // Indicated = what combustion makes, before friction. Brake = what reaches the crank, after friction
     // (the figure a manufacturer quotes as peak torque).
-    public double MaxIndicatedTorqueNm => TorqueFromFuelNm(GasMassG(1.0) / _fuel.StoichiometricAfr);
+    public double MaxIndicatedTorqueNm => TorqueFromFuelNm(AirMassG(1.0) / _fuel.StoichiometricAfr);
     public double MaxBrakeTorqueNm => MaxIndicatedTorqueNm - FrictionTorque;
     public CylinderGeometry Geometry { get; }  // bore, stroke, rod length, compression ratio and volume vs crank angle
 
@@ -150,7 +151,7 @@ public class Engine
 
     // Air taken in per cycle at a given throttle: VE × air density (kg/m³) × displacement (m³) × throttle,
     // then × 1000 to turn kg into g
-    private double GasMassG(double throttle)
+    private double AirMassG(double throttle)
     {
         double displacementInMCubed = DisplacementLiters / 1000;
 

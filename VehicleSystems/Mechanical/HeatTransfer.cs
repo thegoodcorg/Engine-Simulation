@@ -50,7 +50,7 @@ public class HeatTransfer
         double gasSpeed = GasSpeedMs(crankAngleDeg, pressurePa, rpm, afterSpark);
         double h = CoefficientWPerM2K(pressurePa, tempK, gasSpeed);
         double A_wall = WallAreaM2(crankAngleDeg);
-        double dt = StepSeconds(stepDeg, rpm);
+        double dt = CrankHelper.StepSeconds(stepDeg, rpm);
 
         return h * A_wall * (tempK - WallTempK) * dt;
     }
@@ -123,13 +123,4 @@ public class HeatTransfer
 
         return (headAndCrownMm2 + linerMm2) / 1_000_000; // mm² → m² (1 m² = 1000 mm × 1000 mm)
     }
-
-
-    // dt: seconds one crank step takes. The crank turns 6 × RPM degrees per second.
-    private static double StepSeconds(double stepDeg, double rpm)
-    {
-        double degreesPerSecond = rpm * 360 / 60; // revolutions per minute × 360° per revolution ÷ 60 s per minute = 6 × RPM
-        return stepDeg / degreesPerSecond;
-    }
-
 }

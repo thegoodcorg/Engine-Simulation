@@ -9,6 +9,10 @@ public record GasProperties(
     // cv: energy to warm 1 kg of gas by 1 K at constant volume. Worked out from the gas constant and heat ratio so the three always agree.
     public double CvJPerKgK => GasConstantJPerKgK / (HeatRatio - 1);
 
+    // cp: energy carried per kg per kelvin by gas flowing through a valve. Bigger than cv because gas
+    // entering a cylinder also brings the work needed to push it in.
+    public double CpJPerKgK => CvJPerKgK + GasConstantJPerKgK;
+
     public static readonly GasProperties Air = new(
         GasConstantJPerKgK: 287.05, // same value AmbientConditions uses for air density
         HeatRatio: 1.4);            // cv = 287.05 / 0.4 = 717.6 J/(kg·K)
