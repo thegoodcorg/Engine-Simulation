@@ -9,8 +9,8 @@ public class Cylinder
     private readonly Combustion? _combustion;
     private readonly HeatTransfer? _heatTransfer;
 
-    public double AirMassG { get; }
-    private double AirMassKg => AirMassG / 1000; // R and cv are per kg, so the physics uses kg
+    public double GasMassG { get; }
+    private double AirMassKg => GasMassG / 1000; // R and cv are per kg, so the physics uses kg
     public double TempK { get; private set; }
     public double CrankAngleDeg { get; private set; }
     public double WorkJ { get; private set; }
@@ -29,7 +29,7 @@ public class Cylinder
         CrankAngleDeg = crankAngleDeg;
         TempK = temperatureK;
         // Ideal gas law again, solved for mass: m = p·V / (R·T) gives kg, × 1000 for grams
-        AirMassG = pressurePa * VolumeM3 / (gas.GasConstantJPerKgK * temperatureK) * 1000;
+        GasMassG = pressurePa * VolumeM3 / (gas.GasConstantJPerKgK * temperatureK) * 1000;
         _combustion = combustion;
         _heatTransfer = heatTransfer;
 
@@ -41,35 +41,35 @@ public class Cylinder
     public void Step(double stepDeg)
     {
         double h = DegreeHelper.ToRadians(stepDeg);
-        double theta = CrankAngleDeg;
+        double startAngleDeg = CrankAngleDeg;
         double t = TempK;
         double startPressure = PressurePa;
 
         // Four slope samples across the step: start, middle (twice), end
-        var (dT1, dW1) = Slopes(theta, t);
-        var (dT2, dW2) = Slopes(theta + stepDeg / 2, t + dT1 * h / 2);
-        var (dT3, dW3) = Slopes(theta + stepDeg / 2, t + dT2 * h / 2);
-        var (dT4, dW4) = Slopes(theta + stepDeg, t + dT3 * h);
+        var (dT1, dW1) = Slopes(startAngleDeg, t);
+        var (dT2, dW2) = Slopes(startAngleDeg + stepDeg / 2, t + dT1 * h / 2);
+        var (dT3, dW3) = Slopes(startAngleDeg + stepDeg / 2, t + dT2 * h / 2);
+        var (dT4, dW4) = Slopes(startAngleDeg + stepDeg, t + dT3 * h);
 
         TempK = t + h / 6 * (dT1 + 2 * dT2 + 2 * dT3 + dT4);
         WorkJ += h / 6 * (dW1 + 2 * dW2 + 2 * dW3 + dW4);
-        CrankAngleDeg = theta + stepDeg;
+        CrankAngleDeg = startAngleDeg + stepDeg;
 
         if (_combustion != null)
         {
-            double heatJ = _combustion.HeatReleasedJ(theta, CrankAngleDeg);
+            double heatJ = _combustion.HeatReleasedJ(startAngleDeg, CrankAngleDeg);
             TempK += heatJ / (AirMassKg * _gasProperties.CvJPerKgK);
             HeatReleasedJ += heatJ;
         }
 
-        // Heat leaking into the walls during this step cools the gas: ΔT = heat / (m·cv)
+        // Heat leaking into the walls during this step cools the gas: temperature drop = heat / (air mass × cv)
         if (_heatTransfer != null)
         {
             if (Rpm <= 0)
                 throw new InvalidOperationException("Set Rpm before stepping a cylinder with heat transfer: heat loss depends on how long each step takes.");
 
-            bool afterSpark = _combustion != null && theta >= _combustion.BurnStartDeg;
-            double heatLossJ = _heatTransfer.HeatLossJ(theta, startPressure, t, Rpm, stepDeg, afterSpark);
+            bool afterSpark = _combustion != null && startAngleDeg >= _combustion.BurnStartDeg;
+            double heatLossJ = _heatTransfer.HeatLossJ(startAngleDeg, startPressure, t, Rpm, stepDeg, afterSpark);
             TempK -= heatLossJ / (AirMassKg * _gasProperties.CvJPerKgK);
             HeatLostJ += heatLossJ;
         }
@@ -84,17 +84,17 @@ public class Cylinder
         return WorkJ;
     }
 
-    // How fast temperature and work change per radian of crank, at angle thetaDeg and temperature t
-    private (double dTdTheta, double dWdTheta) Slopes(double thetaDeg, double t)
+    // How fast temperature and work change per radian of crank, at angle crankAngleDeg and temperature t
+    private (double tempChangePerRad, double workPerRad) Slopes(double crankAngleDeg, double t)
     {
-        double v = VolumeHelper.CcToCubicMeters(_cylinderGeometry.Volume(thetaDeg));      // m³
-        double dV = VolumeHelper.CcToCubicMeters(_cylinderGeometry.DVdTheta(thetaDeg));  // m³ per radian
+        double v = VolumeHelper.CcToCubicMeters(_cylinderGeometry.Volume(crankAngleDeg));      // m³
+        double dV = VolumeHelper.CcToCubicMeters(_cylinderGeometry.VolumeChangeCcPerRad(crankAngleDeg));  // m³ per radian
         double p = AirMassKg * _gasProperties.GasConstantJPerKgK * t / v;
 
-        // Energy balance with no heat: m·cv·dT = −p·dV
-        double dTdTheta = -p * dV / (AirMassKg * _gasProperties.CvJPerKgK);
-        double dWdTheta = p * dV; // work by the gas: p·dV
+        // Energy balance with no heat: air mass × cv × temperature change = −pressure × volume change
+        double tempChangePerRad = -p * dV / (AirMassKg * _gasProperties.CvJPerKgK);
+        double workPerRad = p * dV; // work by the gas: pressure × volume change
 
-        return (dTdTheta, dWdTheta);
+        return (tempChangePerRad, workPerRad);
     }
 }

@@ -38,7 +38,7 @@ public class Engine
     // They're converted to kg only where the physics needs it (energy per kg, density in kg/L).
 
     // Air the cylinders really take in per cycle (g): VE × air density × displacement (m³) × throttle
-    public double AirMassPerCycleG => AirMassG(ThrottlePosition);
+    public double AirMassPerCycleG => GasMassG(ThrottlePosition);
 
     // Air flowing in per second (g/s): air per cycle × cycles per second (RPM / 120).
     // This is what a MAF sensor reads; the Vehicle passes it to the ECU.
@@ -47,7 +47,7 @@ public class Engine
     // Torque at full throttle with a stoichiometric mix, in today's air. Changes with ambient conditions.
     // Indicated = what combustion makes, before friction. Brake = what reaches the crank, after friction
     // (the figure a manufacturer quotes as peak torque).
-    public double MaxIndicatedTorqueNm => TorqueFromFuelNm(AirMassG(1.0) / _fuel.StoichiometricAfr);
+    public double MaxIndicatedTorqueNm => TorqueFromFuelNm(GasMassG(1.0) / _fuel.StoichiometricAfr);
     public double MaxBrakeTorqueNm => MaxIndicatedTorqueNm - FrictionTorque;
     public CylinderGeometry Geometry { get; }  // bore, stroke, rod length, compression ratio and volume vs crank angle
 
@@ -150,15 +150,15 @@ public class Engine
 
     // Air taken in per cycle at a given throttle: VE × air density (kg/m³) × displacement (m³) × throttle,
     // then × 1000 to turn kg into g
-    private double AirMassG(double throttle)
+    private double GasMassG(double throttle)
     {
         double displacementInMCubed = DisplacementLiters / 1000;
 
         return VolumetricEfficiency * _ambientConditions.AirDensityKgM3 * displacementInMCubed * throttle * 1000;
     }
 
-    // Torque from burning fuel: energy (J) × thermal efficiency = work per cycle, then ÷ 4π
-    // because a cycle is 2 revolutions = 4π radians. Energy content is per kg, so grams ÷ 1000 first.
+    // Torque from burning fuel: energy (J) × thermal efficiency = work per cycle, then ÷ (4 × Math.PI)
+    // because a cycle is 2 revolutions = 4 × Math.PI radians. Energy content is per kg, so grams ÷ 1000 first.
     private double TorqueFromFuelNm(double fuelG)
     {
         double energyJ = fuelG / 1000 * _fuel.EnergyContentJPerKg;

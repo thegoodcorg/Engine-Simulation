@@ -22,15 +22,15 @@ public class Combustion
         return new Combustion(720 - SparkAdvanceDeg, Engine.BurnDurationDeg, totalHeatJ);
     }
 
-    // Fraction of fuel burned at crank angle θ, for a burn that starts at θ₀ and lasts Δθ_burn: 
-    public double BurnFraction(double ThetaDeg)
+    // Fraction of fuel burned by crankAngleDeg, for a burn that starts at BurnStartDeg and lasts BurnDurationDeg: 
+    public double BurnFraction(double crankAngleDeg)
     {
-        if (ThetaDeg <= BurnStartDeg) return 0;
+        if (crankAngleDeg <= BurnStartDeg) return 0;
 
-        double progress = (ThetaDeg - BurnStartDeg) / BurnDurationDeg; // 0 at spark up to 1 at the end of the burn
+        double progress = (crankAngleDeg - BurnStartDeg) / BurnDurationDeg; // 0 at spark up to 1 at the end of the burn
 
 
-        return 1 - Math.Exp(-Engine.WiebeA * Math.Pow(progress, Engine.WiebeM + 1));     // xb(θ) = 1 − exp(−a × ((θ − θ₀) / Δθ_burn)^(m + 1))
+        return 1 - Math.Exp(-Engine.WiebeA * Math.Pow(progress, Engine.WiebeM + 1));     // burnFraction = 1 − Math.Exp(−WiebeA × Math.Pow(progress, WiebeM + 1))
 
     }
 

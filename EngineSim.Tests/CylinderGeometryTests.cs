@@ -2,7 +2,7 @@ using EngineSim.VehicleSystems.Mechanical;
 
 namespace EngineSim.Tests;
 
-// Ticket #23: cylinder volume, dV/dθ and lever arm vs crank angle
+// Ticket #23: cylinder volume, volume change per radian and lever arm vs crank angle
 public class CylinderGeometryTests
 {
     // 95.5 × 88.4 mm, rod 144.2 mm, CR 10.3 (VQ35 placeholders)
@@ -34,10 +34,10 @@ public class CylinderGeometryTests
     [InlineData(90)]
     [InlineData(135)]
     [InlineData(250)]
-    public void Volume_RepeatsEvery360_AndIsSymmetric(double theta)
+    public void Volume_RepeatsEvery360_AndIsSymmetric(double angleDeg)
     {
-        Assert.Equal(_geometry.Volume(theta), _geometry.Volume(theta + 360), precision: 6);
-        Assert.Equal(_geometry.Volume(theta), _geometry.Volume(-theta), precision: 6);
+        Assert.Equal(_geometry.Volume(angleDeg), _geometry.Volume(angleDeg + 360), precision: 6);
+        Assert.Equal(_geometry.Volume(angleDeg), _geometry.Volume(-angleDeg), precision: 6);
     }
 
     [Theory]
@@ -45,12 +45,12 @@ public class CylinderGeometryTests
     [InlineData(90)]
     [InlineData(135)]
     [InlineData(250)]
-    public void DVdTheta_MatchesFiniteDifference(double theta)
+    public void VolumeChangePerRad_MatchesFiniteDifference(double angleDeg)
     {
-        // Step in degrees, divide by the step in radians: DVdTheta is per radian
+        // Step in degrees, divide by the step in radians: VolumeChangeCcPerRad is per radian
         const double h = 0.01;
-        double finiteDifference = (_geometry.Volume(theta + h) - _geometry.Volume(theta - h)) / (2 * h * Math.PI / 180);
-        Assert.Equal(finiteDifference, _geometry.DVdTheta(theta), precision: 3);
+        double finiteDifference = (_geometry.Volume(angleDeg + h) - _geometry.Volume(angleDeg - h)) / (2 * h * Math.PI / 180);
+        Assert.Equal(finiteDifference, _geometry.VolumeChangeCcPerRad(angleDeg), precision: 3);
     }
 
     [Fact]

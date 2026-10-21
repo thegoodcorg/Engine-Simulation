@@ -12,7 +12,7 @@ public class CylinderTests
 
     private static readonly CylinderGeometry Geometry = new(95.5, 88.4, 144.2, 10.3);
 
-    // Isentropic (no heat, no losses) results: p₁ × CR^γ and T₁ × CR^(γ−1)
+    // Isentropic (no heat, no losses) results: startPressure × CR^heatRatio and startTemp × CR^(heatRatio − 1)
     private static readonly double IsentropicPeakPressurePa = StartPressurePa * Math.Pow(10.3, 1.4);
     private static readonly double IsentropicPeakTemperatureK = StartTemperatureK * Math.Pow(10.3, 0.4);
 
@@ -21,7 +21,7 @@ public class CylinderTests
     {
         var cylinder = NewCylinder();
 
-        Assert.Equal(0.859, cylinder.AirMassG, precision: 3);
+        Assert.Equal(0.859, cylinder.GasMassG, precision: 3);
         Assert.Equal(StartPressurePa, cylinder.PressurePa, precision: 6);
     }
 
