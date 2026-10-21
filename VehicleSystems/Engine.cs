@@ -14,7 +14,10 @@ public class Engine
     public const double VolumetricEfficiency = 0.9;      // the cylinders only fill to 90% of their volume
     public const double ThermalEfficiency = 0.36;        // share of the fuel's energy that pushes the pistons (indicated, so friction isn't counted twice)
     public const double CrankStepDeg = 0.5;             // crank angle per simulation step for the cylinder model
-
+    public const double WiebeA = 5;                      // burn completeness: 1 − e^(−5) = 99.3% of the fuel burned by the end of the burn duration
+    public const double WiebeM = 2;                      // burn shape: slow start while the flame kernel grows, fast middle, long tail as it reaches the walls
+    public const double BurnDurationDeg = 50;
+    public const double CombustionEfficiency = 0.98;
     public int CylinderCount { get; }
     public double CylinderVolumeLiters { get; }
     public double DisplacementLiters { get; }

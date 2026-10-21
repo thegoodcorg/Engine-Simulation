@@ -6,19 +6,20 @@ public class Cylinder
 {
     private readonly CylinderGeometry _cylinderGeometry;
     private readonly GasProperties _gasProperties;
+    private readonly Combustion? _combustion;
 
     public double AirMassG { get; }
     private double AirMassKg => AirMassG / 1000; // R and cv are per kg, so the physics uses kg
     public double TempK { get; private set; }
     public double CrankAngleDeg { get; private set; }
     public double WorkJ { get; private set; }
-
+    public double HeatReleasedJ { get; private set; }
+    public double InternalEnergyJ => AirMassKg * _gasProperties.CvJPerKgK * TempK;
     public double VolumeM3 => _cylinderGeometry.Volume(CrankAngleDeg) * 1e-6;
-
     public double PressurePa => AirMassKg * _gasProperties.GasConstantJPerKgK * TempK / VolumeM3;
 
     // Fill the cylinder at crankAngleDeg with gas at the given pressure and temperature, then seal it
-    public Cylinder(CylinderGeometry geometry, GasProperties gas, double crankAngleDeg, double pressurePa, double temperatureK)
+    public Cylinder(CylinderGeometry geometry, GasProperties gas, double crankAngleDeg, double pressurePa, double temperatureK, Combustion? combustion = null)
     {
         _cylinderGeometry = geometry;
         _gasProperties = gas;
@@ -26,6 +27,7 @@ public class Cylinder
         TempK = temperatureK;
         // Ideal gas law again, solved for mass: m = p·V / (R·T) gives kg, × 1000 for grams
         AirMassG = pressurePa * VolumeM3 / (gas.GasConstantJPerKgK * temperatureK) * 1000;
+        _combustion = combustion;
     }
 
     // Turn the crank by stepDeg degrees, updating temperature and work (RK4)
@@ -44,6 +46,22 @@ public class Cylinder
         TempK = t + h / 6 * (dT1 + 2 * dT2 + 2 * dT3 + dT4);
         WorkJ += h / 6 * (dW1 + 2 * dW2 + 2 * dW3 + dW4);
         CrankAngleDeg = theta + stepDeg;
+
+        if (_combustion != null)
+        {
+            double heatJ = _combustion.HeatReleasedJ(theta, CrankAngleDeg);
+            TempK += heatJ / (AirMassKg * _gasProperties.CvJPerKgK);
+            HeatReleasedJ += heatJ;
+        }
+    }
+
+    // Run one sealed cycle from here (expects BDC, 540°) through firing TDC and back to BDC. Returns indicated work (J).
+    public double RunCycle(double stepDeg)
+    {
+        int steps = (int)Math.Round(360 / stepDeg);
+        for (int i = 0; i < steps; i++)
+            Step(stepDeg);
+        return WorkJ;
     }
 
     // How fast temperature and work change per radian of crank, at angle thetaDeg and temperature t
