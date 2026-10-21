@@ -18,6 +18,7 @@ public class Engine
     public const double WiebeM = 2;                      // burn shape: slow start while the flame kernel grows, fast middle, long tail as it reaches the walls
     public const double BurnDurationDeg = 50;
     public const double CombustionEfficiency = 0.98;
+    public const double ExhaustBackPressureAboveAmbientPa = 5_000; // exhaust system back-pressure: exhaust port = ambient + 5 kPa
     public const double WallTempK = 450;                    // fixed, will replace later once cooling code comes into play.
 
     public int CylinderCount { get; }
@@ -157,8 +158,8 @@ public class Engine
         return VolumetricEfficiency * _ambientConditions.AirDensityKgM3 * displacementInMCubed * throttle * 1000;
     }
 
-    // Torque from burning fuel: energy (J) × thermal efficiency = work per cycle, then ÷ 4π
-    // because a cycle is 2 revolutions = 4π radians. Energy content is per kg, so grams ÷ 1000 first.
+    // Torque from burning fuel: energy (J) × thermal efficiency = work per cycle, then ÷ (4 × Math.PI)
+    // because a cycle is 2 revolutions = 4 × Math.PI radians. Energy content is per kg, so grams ÷ 1000 first.
     private double TorqueFromFuelNm(double fuelG)
     {
         double energyJ = fuelG / 1000 * _fuel.EnergyContentJPerKg;

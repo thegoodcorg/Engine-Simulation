@@ -14,8 +14,8 @@ public class CombustionTests
     private static readonly CylinderGeometry Geometry = new(95.5, 88.4, 144.2, 10.3);
     private static readonly FuelProperties Fuel = FuelProperties.PumpGas;
 
-    // Ideal Otto-cycle efficiency, 1 − 1/CR^(γ−1): the best a cycle with this compression ratio can do
-    private static readonly double OttoEfficiency = 1 - 1 / Math.Pow(10.3, GasProperties.Air.Gamma - 1); // ~60.7%
+    // Ideal Otto-cycle efficiency, 1 − 1 / Math.Pow(compressionRatio, heatRatio − 1): the best a cycle with this compression ratio can do
+    private static readonly double OttoEfficiency = 1 - 1 / Math.Pow(10.3, GasProperties.Air.HeatRatio - 1); // ~60.7%
 
     // ---- Wiebe burn fraction ----
 
@@ -42,10 +42,10 @@ public class CombustionTests
         var combustion = new Combustion(700, 50, 1000);
 
         double previous = 0;
-        for (double theta = 690; theta <= 780; theta += 0.5)
+        for (double angleDeg = 690; angleDeg <= 780; angleDeg += 0.5)
         {
-            double fraction = combustion.BurnFraction(theta);
-            Assert.True(fraction >= previous, $"burn fraction went down at {theta}°");
+            double fraction = combustion.BurnFraction(angleDeg);
+            Assert.True(fraction >= previous, $"burn fraction went down at {angleDeg}°");
             previous = fraction;
         }
     }
@@ -143,7 +143,7 @@ public class CombustionTests
     private static double StoichFuelG()
     {
         var unfired = new Cylinder(Geometry, GasProperties.Air, BdcDeg, StartPressurePa, StartTemperatureK);
-        return unfired.AirMassG / Fuel.StoichiometricAfr;
+        return unfired.GasMassG / Fuel.StoichiometricAfr;
     }
 
     // Heat that fuel releases (J), for building a Combustion directly

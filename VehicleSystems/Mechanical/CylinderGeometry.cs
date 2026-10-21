@@ -9,7 +9,7 @@ public class CylinderGeometry
     public double RodLengthMm { get; }          // l
     public double CompressionRatio { get; }
     public double CrankRadiusMm { get; }        // a = stroke / 2
-    public double PistonAreaMm2 { get; }        // π/4 × bore²
+    public double PistonAreaMm2 { get; }        // Math.PI / 4 × bore²
     public double SweptVolumeCc { get; }        // Ap × stroke / 1000
     public double ClearanceVolumeCc { get; }    // swept / (CR − 1)
 
@@ -25,33 +25,33 @@ public class CylinderGeometry
         ClearanceVolumeCc = SweptVolumeCc / (compressionRatio - 1);
     }
 
-    // Cylinder volume (cc) at crank angle θ in degrees. Steps 3–5.
-    public double Volume(double thetaDeg)
+    // Cylinder volume (cc) at a crank angle in degrees. Steps 3–5.
+    public double Volume(double crankAngleDeg)
     {
-        double theta = DegreeHelper.ToRadians(thetaDeg);
-        double s = CrankRadiusMm * Math.Cos(theta) + RodVerticalReach(theta);
+        double crankAngleRad = DegreeHelper.ToRadians(crankAngleDeg);
+        double s = CrankRadiusMm * Math.Cos(crankAngleRad) + RodVerticalReach(crankAngleRad);
         double drop = RodLengthMm + CrankRadiusMm - s;
         return ClearanceVolumeCc + PistonAreaMm2 * drop / 1000;
     }
 
     // Piston travel per radian of crank (mm/rad). Step 7.
-    public double LeverArm(double thetaDeg)
+    public double LeverArm(double crankAngleDeg)
     {
-        double theta = DegreeHelper.ToRadians(thetaDeg);
+        double crankAngleRad = DegreeHelper.ToRadians(crankAngleDeg);
         double a = CrankRadiusMm;
-        return a * Math.Sin(theta) * (1 + a * Math.Cos(theta) / RodVerticalReach(theta));
+        return a * Math.Sin(crankAngleRad) * (1 + a * Math.Cos(crankAngleRad) / RodVerticalReach(crankAngleRad));
     }
 
     // Rate of volume change (cc per radian). Step 8.
-    public double DVdTheta(double thetaDeg)
+    public double VolumeChangeCcPerRad(double crankAngleDeg)
     {
-        return PistonAreaMm2 * LeverArm(thetaDeg) / 1000;
+        return PistonAreaMm2 * LeverArm(crankAngleDeg) / 1000;
     }
 
-    // √(l² − a²·sin²θ), step 2
-    private double RodVerticalReach(double theta)
+    // Rod's vertical reach: Math.Sqrt(rodLength² − sideways²), step 2
+    private double RodVerticalReach(double crankAngleRad)
     {
-        double sideways = CrankRadiusMm * Math.Sin(theta);
+        double sideways = CrankRadiusMm * Math.Sin(crankAngleRad);
         return Math.Sqrt(RodLengthMm * RodLengthMm - sideways * sideways);
     }
 }

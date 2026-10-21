@@ -48,6 +48,21 @@ public class HeatTransferTests
     }
 
     [Fact]
+    public void PressureBelowTheNoBurnPressure_StillGivesARealHeatLoss()
+    {
+        // After the spark, heat loss can leave the gas slightly below the pressure it would have with no burn.
+        // The combustion part of the gas speed must stop at zero rather than go negative (which gives NaN).
+        var heatTransfer = NewHeatTransfer();
+        heatTransfer.CaptureReferenceState(StartPressurePa, VolumeAtBdcM3(), StartTemperatureK);
+
+        // At TDC the no-burn pressure is about 2,650 kPa: ask for the loss at only 1,000 kPa, at low RPM
+        double lossJ = heatTransfer.HeatLossJ(720, 1_000_000, 900, 1000, Engine.CrankStepDeg, afterSpark: true);
+
+        Assert.False(double.IsNaN(lossJ));
+        Assert.True(lossJ > 0);
+    }
+
+    [Fact]
     public void MotoringWithHeatLoss_GivesSlightlyNegativeWork()
     {
         // No combustion: the gas is squeezed and let out again, but some of the squeezing heat leaks into the walls,
@@ -102,7 +117,7 @@ public class HeatTransferTests
     private static double StoichFuelG()
     {
         var unfired = new Cylinder(Geometry, GasProperties.Air, BdcDeg, StartPressurePa, StartTemperatureK);
-        return unfired.AirMassG / Fuel.StoichiometricAfr;
+        return unfired.GasMassG / Fuel.StoichiometricAfr;
     }
 
     private static double VolumeAtBdcM3() =>

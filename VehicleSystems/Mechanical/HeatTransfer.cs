@@ -40,17 +40,17 @@ public class HeatTransfer
 
     // Heat lost to the walls during one crank step (J). Positive = gas loses heat.
     // afterSpark switches on the combustion part of the gas speed (C2).
-    public double HeatLossJ(double thetaDeg, double pressurePa, double tempK, double rpm, double stepDeg, bool afterSpark)
+    public double HeatLossJ(double crankAngleDeg, double pressurePa, double tempK, double rpm, double stepDeg, bool afterSpark)
     {
         // dQ_loss = h × A_wall × (T − T_wall) × dt
         //   h:            how leaky the walls are right now      → CoefficientWPerM2K(...)
-        //   A_wall:       metal area the gas is touching          → WallAreaM2(thetaDeg)
+        //   A_wall:       metal area the gas is touching          → WallAreaM2(crankAngleDeg)
         //   T − T_wall:   how much hotter the gas is than the metal
         //   dt:           seconds this step lasts                 → StepSeconds(stepDeg, rpm)
-        double gasSpeed = GasSpeedMs(thetaDeg, pressurePa, rpm, afterSpark);
+        double gasSpeed = GasSpeedMs(crankAngleDeg, pressurePa, rpm, afterSpark);
         double h = CoefficientWPerM2K(pressurePa, tempK, gasSpeed);
-        double A_wall = WallAreaM2(thetaDeg);
-        double dt = StepSeconds(stepDeg, rpm);
+        double A_wall = WallAreaM2(crankAngleDeg);
+        double dt = CrankHelper.StepSeconds(stepDeg, rpm);
 
         return h * A_wall * (tempK - WallTempK) * dt;
     }
@@ -69,7 +69,7 @@ public class HeatTransfer
 
     // w: how fast the gas is swirling around (m/s) = piston-motion part + combustion part
     // w = C1 × Sp_mean + C2 × (Vd × T_r / (p_r × V_r)) × (p − p_motored), pressures in kPa
-    private double GasSpeedMs(double thetaDeg, double pressurePa, double rpm, bool afterSpark)
+    private double GasSpeedMs(double crankAngleDeg, double pressurePa, double rpm, bool afterSpark)
     {
         double C1 = C1CompressionExpansion;
         double Sp_mean = MeanPistonSpeedMs(rpm);
@@ -79,13 +79,17 @@ public class HeatTransfer
         double p_r = _referencePressurePa;
         double V_r = _referenceVolumeM3;
         double p = pressurePa;
-        double p_motored = MotoredPressurePa(thetaDeg);
+        double p_motored = MotoredPressurePa(crankAngleDeg);
 
         // C2 = 0 before the spark: no combustion turbulence yet, only piston motion
         if (!afterSpark)
             return C1 * Sp_mean;
 
-        return C1 * Sp_mean + C2 * (Vd * T_r / (p_r * V_r) * (p - p_motored));
+        // The pressure the burn added can't be negative. With heat loss, the gas can sit slightly below the
+        // no-burn pressure, and a negative gas speed would make Math.Pow return NaN in the heat coefficient.
+        double burnPressureRisePa = Math.Max(p - p_motored, 0);
+
+        return C1 * Sp_mean + C2 * (Vd * T_r / (p_r * V_r) * burnPressureRisePa);
 
     }
 
@@ -96,22 +100,22 @@ public class HeatTransfer
     }
 
     // p_motored: what the pressure would be right now if nothing had burned (Pa)
-    // = p_r × (V_r / V)^γ
-    private double MotoredPressurePa(double thetaDeg)
+    // = referencePressure × Math.Pow(referenceVolume / volumeNow, heatRatio)
+    private double MotoredPressurePa(double crankAngleDeg)
     {
-        double volumeNowM3 = VolumeHelper.CcToCubicMeters(_geometry.Volume(thetaDeg));
-        return _referencePressurePa * Math.Pow(_referenceVolumeM3 / volumeNowM3, _gas.Gamma);
+        double volumeNowM3 = VolumeHelper.CcToCubicMeters(_geometry.Volume(crankAngleDeg));
+        return _referencePressurePa * Math.Pow(_referenceVolumeM3 / volumeNowM3, _gas.HeatRatio);
     }
 
 
     // A_wall: metal the gas touches right now (m²) = head + piston crown (one piston area each)
-    // + the strip of cylinder wall the piston has uncovered (π × bore × how far the piston is below TDC)
-    // Distance below TDC (mm) = (Volume(θ) − ClearanceVolumeCc) × 1000 / PistonAreaMm2
-    private double WallAreaM2(double thetaDeg)
+    // + the strip of cylinder wall the piston has uncovered (Math.PI × bore × how far the piston is below TDC)
+    // Distance below TDC (mm) = (Volume(crankAngleDeg) − ClearanceVolumeCc) × 1000 / PistonAreaMm2
+    private double WallAreaM2(double crankAngleDeg)
     {
         // How far the piston is below TDC (mm): the swept part of the volume ÷ piston area.
         // Volume is in cc, so × 1000 for mm³ before dividing by mm².
-        double sweptSoFarCc = _geometry.Volume(thetaDeg) - _geometry.ClearanceVolumeCc;
+        double sweptSoFarCc = _geometry.Volume(crankAngleDeg) - _geometry.ClearanceVolumeCc;
         double pistonDropMm = sweptSoFarCc * 1000 / _geometry.PistonAreaMm2;
 
         double headAndCrownMm2 = 2 * _geometry.PistonAreaMm2;
@@ -119,13 +123,4 @@ public class HeatTransfer
 
         return (headAndCrownMm2 + linerMm2) / 1_000_000; // mm² → m² (1 m² = 1000 mm × 1000 mm)
     }
-
-
-    // dt: seconds one crank step takes. The crank turns 6 × RPM degrees per second.
-    private static double StepSeconds(double stepDeg, double rpm)
-    {
-        double degreesPerSecond = rpm * 360 / 60; // revolutions per minute × 360° per revolution ÷ 60 s per minute = 6 × RPM
-        return stepDeg / degreesPerSecond;
-    }
-
 }

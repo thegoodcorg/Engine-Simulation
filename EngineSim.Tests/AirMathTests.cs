@@ -13,7 +13,7 @@ public class AirMathTests
     //   air  = 0.9 × 1.2250 kg/m³ × 0.0037993 m³ = 0.0041887 kg = 4.1887 g
     //   fuel = air / 14.7                         = 0.28495 g
     //   work = fuel (kg) × 44,000,000 J/kg × 0.36 = 4,513.6 J
-    //   torque = work / 4π                        = 359.18 Nm
+    //   torque = work / (4 × Math.PI)             = 359.18 Nm
     private const double FullThrottleAirG = 4.1887;
     private const double FullThrottleTorqueNm = 359.18;
 
