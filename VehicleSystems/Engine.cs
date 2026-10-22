@@ -8,7 +8,6 @@ public class Engine
 {
     // Tuning constants
     private const double PistonSpeedLimitMs = 20;        // max mean piston speed, sets the redline
-    private const double FmepBar = 1.2;                    // Friction mean effective pressure, used for torque
     private const double InertiaPerLiter = 0.05;            // kg·m² per liter of displacement
     public const double CrankTimeSeconds = 0.5;
     public const double VolumetricEfficiency = 0.9;      // the cylinders only fill to 90% of their volume
@@ -20,13 +19,17 @@ public class Engine
     public const double CombustionEfficiency = 0.98;
     public const double ExhaustBackPressureAboveAmbientPa = 5_000; // exhaust system back-pressure: exhaust port = ambient + 5 kPa
     public const double WallTempK = 450;                    // fixed, will replace later once cooling code comes into play.
+    private const double FrictionBaseBar = 0.97;           // always there: seals, accessories
+    private const double FrictionPerKrpmBar = 0.15;        // grows steadily with speed: bearings, rings
+    private const double FrictionPerKrpmSquaredBar = 0.05; // grows fast at high RPM: oil churning, valvetrain
+    public const double PeakTorqueRpm = 4400;              // where the VQ38DD makes peak torque (Nissan spec, #30's calibration target)
+
 
     public int CylinderCount { get; }
     public double CylinderVolumeLiters { get; }
     public double DisplacementLiters { get; }
     public double MaxRpm { get; }
     public double EngineSpeed { get; private set; }
-    public double FrictionTorque { get; } // FMEP * displacement / (4pi)
     public double EngineTorqueNm { get; private set; } // torque being made right now
     public double NetTorque { get; private set; }
     public double Inertia { get; }
@@ -51,7 +54,8 @@ public class Engine
     // (the figure a manufacturer quotes as peak torque).
     // Wide open the plenum sits at outside pressure, so this uses outside air density.
     public double MaxIndicatedTorqueNm => TorqueFromFuelNm(AirMassG(_ambientConditions.AirDensityKgM3) / _fuel.StoichiometricAfr);
-    public double MaxBrakeTorqueNm => MaxIndicatedTorqueNm - FrictionTorque;
+    // Friction depends on RPM now, so brake torque is quoted at the peak-torque speed
+    public double MaxBrakeTorqueNm => MaxIndicatedTorqueNm - FrictionTorqueNm(PeakTorqueRpm);
     public CylinderGeometry Geometry { get; }  // bore, stroke, rod length, compression ratio and volume vs crank angle
 
     // 0 = released (idle air still gets in through the manifold's bypass), 1.0 = wide open. Values outside that range get clamped.
@@ -78,7 +82,6 @@ public class Engine
         DisplacementLiters = TotalDisplacement();
         MaxRpm = CalculateRedline();
         EngineSpeed = 0; // starts switched off
-        FrictionTorque = PressureToTorqueNm(FmepBar);
         Inertia = InertiaPerLiter * DisplacementLiters;
         _ambientConditions = ambientConditions;
         _fuel = fuel;
@@ -116,7 +119,7 @@ public class Engine
         // decision (it cuts fuel with the spark), so the engine just uses what it's given.
         FuelBurnedG = FuelUsedG(fuelPerCycleG, EngineSpeed, dt);
 
-        double friction = EngineSpeed > 0 ? FrictionTorque : 0;
+        double friction = EngineSpeed > 0 ? FrictionTorqueNm(EngineSpeed) : 0;
 
         // Pumping loss: pulling air in against plenum vacuum and pushing exhaust out at outside pressure costs work every cycle.
         // (outside pressure − plenum pressure) × displacement (m³) ÷ (4 × Math.PI). Closed throttle at high RPM = engine braking.
@@ -186,5 +189,16 @@ public class Engine
         double displacementInMCubed = DisplacementLiters / 1000;
 
         return pressureInPa * displacementInMCubed / (4 * Math.PI);
+    }
+
+    // Friction torque at a given RPM: FMEP (bar) turned into torque, the same conversion as before
+    public double FrictionTorqueNm(double rpm) => PressureToTorqueNm(CalculateFmepBar(rpm));
+
+    // Friction mean effective pressure (bar) at a given RPM (Heywood, spark-ignition engines):
+    //   fmepBar = base + perKrpm × rpmK + perKrpmSquared × rpmK², where rpmK = RPM in thousands
+    private static double CalculateFmepBar(double rpm)
+    {
+        double rpmK = rpm / 1000;
+        return FrictionBaseBar + FrictionPerKrpmBar * rpmK + FrictionPerKrpmSquaredBar * rpmK * rpmK;
     }
 }

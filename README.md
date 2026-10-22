@@ -52,6 +52,25 @@ torque = BMEP × displacement / 4π
 
 With BMEP at 12.5 bar this gives about 378 Nm for the Frontier engine, against Nissan's rated 381 Nm.
 
+**Friction.** The engine loses more to friction the faster it spins: bearings and piston rings, oil churning, the valvetrain. Friction is worked out as a friction mean effective pressure (FMEP) that rises with RPM, using Heywood's figures for spark-ignition engines (`rpmK` = RPM in thousands):
+
+```
+fmepBar          = 0.97 + 0.15 × rpmK + 0.05 × rpmK²
+frictionTorqueNm = fmepBar × 100,000 × displacementM3 / (4 × Math.PI)
+```
+
+- `0.97`: base friction that's always there (seals, accessories)
+- `0.15 × rpmK`: grows steadily with speed (bearings, rings)
+- `0.05 × rpmK²`: grows fast at high RPM (oil churning, valvetrain)
+
+| RPM | FMEP | Friction torque (3.8 L) |
+| --- | --- | --- |
+| 700 | 1.10 bar | 33 Nm |
+| 3,000 | 1.87 bar | 57 Nm |
+| 6,700 | 4.22 bar | 128 Nm |
+
+Friction only applies while the crank is turning. Because it rises with RPM (and the throttle's air supply doesn't), an engine left at a fixed part throttle settles at a steady speed instead of racing to the limiter: about 3,150 RPM at 10% throttle and 5,350 RPM at 20%. The coefficients are constants at the top of `Engine.cs`.
+
 **RPM.** Throttle maps linearly from idle (closed) to redline (wide open), giving a target RPM. Each tick, RPM eases toward that target, climbing faster than it falls so letting off feels like coasting down. At closed throttle the idle drifts randomly around 700 RPM.
 
 **Time step.** Every update is scaled by `dt`, the seconds elapsed per tick, so the sim behaves the same at any update rate.
