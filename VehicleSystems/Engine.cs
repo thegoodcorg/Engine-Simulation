@@ -1,4 +1,5 @@
 using EngineSim.Constants;
+using EngineSim.VehicleSystems.Air;
 using EngineSim.VehicleSystems.Mechanical;
 
 namespace EngineSim;
@@ -7,7 +8,6 @@ public class Engine
 {
     // Tuning constants
     private const double PistonSpeedLimitMs = 20;        // max mean piston speed, sets the redline
-    private const double MinThrottle = 0.06;             // throttle never fully closes, like an idle air bypass (#32 replaces this with ECU idle air)
     private const double FmepBar = 1.2;                    // Friction mean effective pressure, used for torque
     private const double InertiaPerLiter = 0.05;            // kg·m² per liter of displacement
     public const double CrankTimeSeconds = 0.5;
@@ -34,30 +34,32 @@ public class Engine
     public double FuelBurnedG { get; private set; } // fuel used in the last Update (g), for the Vehicle to drain from the tank
     private readonly AmbientConditions _ambientConditions;
     private readonly FuelProperties _fuel;
+    private readonly IntakeManifold _manifold;
+    public double MafGPerS => _manifold.MafGPerS;                 // air coming in through the throttle: what a MAF sensor reads, passed to the ECU
+    public double ManifoldPressureKpa => _manifold.MapKpa;        // plenum pressure (MAP), absolute
 
     // Air and fuel are in grams, the way an OBD2 reader shows MAF (g/s).
     // They're converted to kg only where the physics needs it (energy per kg, density in kg/L).
 
-    // Air the cylinders really take in per cycle (g): VE × air density × displacement (m³) × throttle
-    public double AirMassPerCycleG => AirMassG(ThrottlePosition);
+    // Air the cylinders really take in per cycle (g), filling from the plenum. The throttle's effect is already
+    // in the plenum pressure (low at part throttle, near outside pressure when wide open), so there's no throttle factor here.
+    public double AirMassPerCycleG => AirMassG(_manifold.DensityKgPerM3);
 
-    // Air flowing in per second (g/s): air per cycle × cycles per second (RPM / 120).
-    // This is what a MAF sensor reads; the Vehicle passes it to the ECU.
-    public double AirflowGPerS => AirMassPerCycleG * EngineSpeed / 120;
 
     // Torque at full throttle with a stoichiometric mix, in today's air. Changes with ambient conditions.
     // Indicated = what combustion makes, before friction. Brake = what reaches the crank, after friction
     // (the figure a manufacturer quotes as peak torque).
-    public double MaxIndicatedTorqueNm => TorqueFromFuelNm(AirMassG(1.0) / _fuel.StoichiometricAfr);
+    // Wide open the plenum sits at outside pressure, so this uses outside air density.
+    public double MaxIndicatedTorqueNm => TorqueFromFuelNm(AirMassG(_ambientConditions.AirDensityKgM3) / _fuel.StoichiometricAfr);
     public double MaxBrakeTorqueNm => MaxIndicatedTorqueNm - FrictionTorque;
     public CylinderGeometry Geometry { get; }  // bore, stroke, rod length, compression ratio and volume vs crank angle
 
-    // MinThrottle = released, 1.0 = wide open. Values outside that range get clamped.
-    private double _throttlePosition = MinThrottle;
+    // 0 = released (idle air still gets in through the manifold's bypass), 1.0 = wide open. Values outside that range get clamped.
+    private double _throttlePosition = 0;
     public double ThrottlePosition
     {
         get => _throttlePosition;
-        set => _throttlePosition = Math.Clamp(value, MinThrottle, 1.0);
+        set => _throttlePosition = Math.Clamp(value, 0, 1);
     }
 
     public Engine(
@@ -80,6 +82,7 @@ public class Engine
         Inertia = InertiaPerLiter * DisplacementLiters;
         _ambientConditions = ambientConditions;
         _fuel = fuel;
+        _manifold = new IntakeManifold(ambientConditions, DisplacementLiters);
     }
     public void StartEngine()
     {
@@ -102,6 +105,7 @@ public class Engine
     public void Update(double dt, bool sparkOn, double idleFloorRpm, double fuelPerCycleG)
     {
         bool combusting = IsRunning && sparkOn;
+        _manifold.Update(dt, EngineSpeed, ThrottlePosition);
 
         // 1. Torque from the fuel that burns, minus what friction takes away.
         //    Fuel needs air to burn: in a rich mix the extra fuel goes out unburned, so the air sets a cap.
@@ -114,7 +118,12 @@ public class Engine
 
         double friction = EngineSpeed > 0 ? FrictionTorque : 0;
 
-        NetTorque = EngineTorqueNm - friction;
+        // Pumping loss: pulling air in against plenum vacuum and pushing exhaust out at outside pressure costs work every cycle.
+        // (outside pressure − plenum pressure) × displacement (m³) ÷ (4 × Math.PI). Closed throttle at high RPM = engine braking.
+        double outsidePressurePa = _ambientConditions.AirPressureKpa * 1000;
+        double pumpingTorqueNm = (outsidePressurePa - _manifold.PressurePa) * (DisplacementLiters / 1000) / (4 * Math.PI);
+
+        NetTorque = EngineTorqueNm - friction - pumpingTorqueNm;
 
         // 2. Rotational version of F = ma: angular acceleration = torque / inertia (rad/s²)
         double angularAcceleration = NetTorque / Inertia;
@@ -149,13 +158,13 @@ public class Engine
         return fuelPerCycleG * rpm / 120 * dt;
     }
 
-    // Air taken in per cycle at a given throttle: VE × air density (kg/m³) × displacement (m³) × throttle,
-    // then × 1000 to turn kg into g
-    private double AirMassG(double throttle)
+    // Air taken in per cycle when the cylinders fill from air of this density (kg/m³):
+    // VolumetricEfficiency × density × displacement (m³), then × 1000 to turn kg into g
+    private double AirMassG(double airDensityKgPerM3)
     {
         double displacementInMCubed = DisplacementLiters / 1000;
 
-        return VolumetricEfficiency * _ambientConditions.AirDensityKgM3 * displacementInMCubed * throttle * 1000;
+        return VolumetricEfficiency * airDensityKgPerM3 * displacementInMCubed * 1000;
     }
 
     // Torque from burning fuel: energy (J) × thermal efficiency = work per cycle, then ÷ (4 × Math.PI)
