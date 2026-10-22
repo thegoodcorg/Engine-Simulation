@@ -184,8 +184,8 @@ public class IntakeManifoldTests
         // Pulling air in against the near-vacuum plenum (pumping loss) adds to friction: that's engine braking.
         var engine = RunningEngineHeldAt(4000, throttle: 0);
 
-        Assert.True(engine.NetTorque < -engine.FrictionTorque,
-            $"net torque {engine.NetTorque:F1} Nm vs friction {engine.FrictionTorque:F1} Nm");
+        double frictionNm = engine.FrictionTorqueNm(4000);
+        Assert.True(engine.NetTorque < -frictionNm, $"net torque {engine.NetTorque:F1} Nm vs friction {frictionNm:F1} Nm");
         Assert.True(engine.ManifoldPressureKpa < 20);
     }
 

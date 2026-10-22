@@ -44,9 +44,9 @@ public class AirMathTests
     {
         var engine = NewEngine();
 
-        // 359.18 Nm from combustion − 36.28 Nm friction (1.2 bar FMEP) = 322.9 Nm at the crank
-        Assert.Equal(FullThrottleTorqueNm - engine.FrictionTorque, engine.MaxBrakeTorqueNm, 0.01);
-        Assert.Equal(322.9, engine.MaxBrakeTorqueNm, 0.1);
+        // 359.18 Nm from combustion − 78.55 Nm friction at the 4,400 RPM peak-torque speed (2.60 bar FMEP) = 280.6 Nm at the crank
+        Assert.Equal(FullThrottleTorqueNm - engine.FrictionTorqueNm(Engine.PeakTorqueRpm), engine.MaxBrakeTorqueNm, 0.01);
+        Assert.Equal(280.6, engine.MaxBrakeTorqueNm, 0.1);
     }
 
     [Fact]
