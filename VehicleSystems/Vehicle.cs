@@ -1,3 +1,4 @@
+using EngineSim.VehicleSystems.Body;
 using EngineSim.VehicleSystems.Electrical;
 
 namespace EngineSim;
@@ -12,6 +13,11 @@ public class Vehicle
     private readonly Battery _battery;
     private readonly Starter _starter;
     private readonly IgnitionSystem _ignitionSystem;
+    private readonly VehicleBody _body;
+
+    // Driver and road inputs (#37). The controls ticket sets these from the keyboard.
+    public double BrakePedal { get; set; }      // 0 = off, 1 = full braking
+    public double GradePercent { get; set; }    // hill steepness: 5 = climbing 5 m per 100 m, negative = downhill. 0 = flat
 
     private bool _startKeyHeld;         // set by Program.cs every tick
     private string? _diagnosticMessage; // latest ECU message: a refusal, stall reason or warning, or null
@@ -24,6 +30,7 @@ public class Vehicle
         _battery = new Battery();
         _starter = new Starter();
         _ignitionSystem = new IgnitionSystem();
+        _body = new VehicleBody();
     }
 
     // ---- Values for Program.cs to display (read-only) ----
@@ -47,6 +54,11 @@ public class Vehicle
     }
     public double BatteryVoltage => _battery.IsBatteryConnected ? _battery.BatteryChargeV : 0;
     public bool SparkOn => _ignitionSystem.SparkOn;
+
+    // Road (#37)
+    public double SpeedMs => _body.SpeedMs;
+    public double SpeedKmh => _body.SpeedKmh;
+    public double AccelerationMs2 => _body.AccelerationMs2;
 
     // Engine specs for the startup summary
     public double BoreMm => _engine.Geometry.BoreMm;
@@ -82,6 +94,9 @@ public class Vehicle
 
         // Drain what the engine used: grams ÷ 1000 = kg, then ÷ density (kg/L) = liters
         _fuelSystem.Drain(_engine.FuelBurnedG / 1000 / _fuelSystem.Fuel.DensityKgPerL);
+
+        // The truck on the road. No drivetrain yet, so no drive force: it only coasts, brakes and rolls on hills
+        _body.Update(dt, driveForceN: 0, BrakePedal, GradePercent, _engine.OutsideAirDensityKgM3);
     }
 
     // Snapshot of everything the ECU reads this tick
