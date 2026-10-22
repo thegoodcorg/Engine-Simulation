@@ -39,7 +39,8 @@ public class Engine
     private readonly FuelProperties _fuel;
     private readonly IntakeManifold _manifold;
     public double MafGPerS => _manifold.MafGPerS;                 // air coming in through the throttle: what a MAF sensor reads, passed to the ECU
-    public double ManifoldPressureKpa => _manifold.MapKpa;        // plenum pressure (MAP), absolute
+    public double ManifoldPressureKpa => _manifold.MapKpa;
+    public double OutsideAirDensityKgM3 => _ambientConditions.AirDensityKgM3;   // the air the whole vehicle drives through (aero drag uses it)        // plenum pressure (MAP), absolute
 
     // Air and fuel are in grams, the way an OBD2 reader shows MAF (g/s).
     // They're converted to kg only where the physics needs it (energy per kg, density in kg/L).
