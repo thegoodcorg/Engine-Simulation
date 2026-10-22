@@ -71,7 +71,22 @@ frictionTorqueNm = fmepBar × 100,000 × displacementM3 / (4 × Math.PI)
 
 Friction only applies while the crank is turning. Because it rises with RPM (and the throttle's air supply doesn't), an engine left at a fixed part throttle settles at a steady speed instead of racing to the limiter: about 3,150 RPM at 10% throttle and 5,350 RPM at 20%. The coefficients are constants at the top of `Engine.cs`.
 
-**RPM.** Throttle maps linearly from idle (closed) to redline (wide open), giving a target RPM. Each tick, RPM eases toward that target, climbing faster than it falls so letting off feels like coasting down. At closed throttle the idle drifts randomly around 700 RPM.
+**RPM.** RPM comes from net torque: engine torque minus friction and pumping loss, divided by the crank's inertia. Nothing sets RPM directly. It rises when the engine makes more torque than it loses, and falls when it makes less. Redline is a hard ceiling.
+
+**Idle.** The throttle is drive-by-wire: the pedal is only a request, and the ECU decides where the throttle plate actually sits. With your foot off, a little air still leaks past the closed plate (10 mm²), but not enough to idle. The ECU holds the plate slightly open on top of the pedal, about 1.5% at sea level, and adjusts it every tick to keep about 700 RPM:
+
+```
+plateOpening        = pedalPosition + idleThrottleOpening
+rpmErrorRpm         = targetIdleRpm − rpm
+idleThrottleOpening = 0.015 + 0.000016 × rpmErrorRpm + 0.00002 × (rpmErrorRpm added up over time)
+```
+
+- The first term is a best first guess at the opening where torque balances friction and pumping loss.
+- The second reacts straight away: idling 100 RPM low opens the plate a little more.
+- The third slowly removes whatever error is left, for example in thin air at altitude, where it finds a bigger opening by itself.
+- The opening stays between 0 and 6%. It holds still while the pedal is pressed, and on a lift-off from high RPM it won't close below its idle position (a dashpot), so the engine coasts down to idle instead of braking straight through it.
+- The target RPM wobbles by ±2%, so idle still sounds a little uneven.
+- **Stalling:** if the engine is running on its own below 250 RPM, the ECU stalls it. The check is skipped for the first second after starting, while the engine picks up from cranking speed (200 RPM).
 
 **Time step.** Every update is scaled by `dt`, the seconds elapsed per tick, so the sim behaves the same at any update rate.
 

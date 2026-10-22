@@ -34,10 +34,10 @@ public class IgnitionTests
         engine.ThrottlePosition = 1;
         double fuelPerCycleG = engine.AirMassPerCycleG / FuelProperties.PumpGas.StoichiometricAfr;
         for (int i = 0; i < 10; i++)
-            engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, fuelPerCycleG); // get some speed up
+            engine.Update(Dt, sparkOn: true, idleThrottleOpening: 0, fuelPerCycleG); // get some speed up
         double rpmBefore = engine.EngineSpeed;
 
-        engine.Update(Dt, sparkOn: false, idleFloorRpm: 0, fuelPerCycleG);
+        engine.Update(Dt, sparkOn: false, idleThrottleOpening: 0, fuelPerCycleG);
 
         Assert.Equal(0, engine.EngineTorqueNm);
         Assert.True(engine.EngineSpeed < rpmBefore);

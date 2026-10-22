@@ -15,7 +15,9 @@ public class IntakeManifold
     private const double ThrottleBoreMm = 70;
     private const double ClosedPlateAngleDeg = 7;          // plates sit slightly tilted when shut so they don't jam in the bore
     private const double ThrottleDischargeCoefficient = 0.8;
-    private const double BypassAreaMm2 = 21.7;             // idle air path, always open. Fixed here; #32 lets the ECU control it
+    // Air that always gets past the shut plate: real plates never seal perfectly and rest on a stop slightly open.
+    // Kept small so the ECU has to hold the plate a little open to idle, and can open it more or less as needed (#32).
+    public const double ClosedPlateLeakAreaMm2 = 10;
     private const double PlenumVolumeLiters = 4.0;         // about one displacement
     public const double DefaultSubStepSeconds = 0.001;     // the plenum reacts in ~20–50 ms, so step it at 1 ms, not once per 50 ms tick
 
@@ -105,18 +107,18 @@ public class IntakeManifold
             plenumPressurePa, outsideTempK, GasProperties.Air, ThrottleDischargeCoefficient);
     }
 
-    // Open area air can get through (m²): the gap around the throttle plate plus the always-open bypass.
+    // Open area air can get through (m²): the gap around the throttle plate plus the closed-plate leak.
     //   plateAngleDeg  = PlateAngleDeg(pedal)
     //   plateGapMm2    = Math.PI / 4 × ThrottleBoreMm² × (1 − Math.Cos(plateAngle) / Math.Cos(closedPlateAngle))   (angles in radians)
-    //   throttleAreaM2 = (plateGapMm2 + BypassAreaMm2) / 1,000,000
-    // Pedal 0 gives the bypass alone (the cosines cancel); pedal 1 gives the full bore plus the bypass.
+    //   throttleAreaM2 = (plateGapMm2 + ClosedPlateLeakAreaMm2) / 1,000,000
+    // Opening 0 gives the leak alone (the cosines cancel); opening 1 gives the full bore plus the leak.
     public double ThrottleAreaM2(double pedal)
     {
         double plateAngleDeg = PlateAngleDeg(pedal);
         // Math.Cos takes radians
         double plateGapMm2 = Math.PI / 4 * Math.Pow(ThrottleBoreMm, 2)
             * (1 - Math.Cos(DegreeHelper.ToRadians(plateAngleDeg)) / Math.Cos(DegreeHelper.ToRadians(ClosedPlateAngleDeg)));
-        return (plateGapMm2 + BypassAreaMm2) / 1000000;
+        return (plateGapMm2 + ClosedPlateLeakAreaMm2) / 1000000;
     }
 
     // Plate angle for a pedal position: ClosedPlateAngleDeg at pedal 0, 90° (edge-on to the air, wide open) at pedal 1

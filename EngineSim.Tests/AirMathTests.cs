@@ -33,7 +33,7 @@ public class AirMathTests
     {
         var engine = RunningEngine(throttle: 1);
 
-        engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, StoichFuel(engine));
+        engine.Update(Dt, sparkOn: true, idleThrottleOpening: 0, StoichFuel(engine));
 
         Assert.Equal(FullThrottleTorqueNm, engine.EngineTorqueNm, 0.01);
         Assert.Equal(FullThrottleTorqueNm, engine.MaxIndicatedTorqueNm, 0.01);
@@ -64,11 +64,11 @@ public class AirMathTests
     {
         var stoich = RunningEngine(throttle: 1);
         var rich = RunningEngine(throttle: 1);
-        stoich.Update(Dt, sparkOn: true, idleFloorRpm: 0, StoichFuel(stoich)); // get both cranks turning
-        rich.Update(Dt, sparkOn: true, idleFloorRpm: 0, StoichFuel(rich));
+        stoich.Update(Dt, sparkOn: true, idleThrottleOpening: 0, StoichFuel(stoich)); // get both cranks turning
+        rich.Update(Dt, sparkOn: true, idleThrottleOpening: 0, StoichFuel(rich));
 
-        stoich.Update(Dt, sparkOn: true, idleFloorRpm: 0, stoich.AirMassPerCycleG / 14.7);
-        rich.Update(Dt, sparkOn: true, idleFloorRpm: 0, rich.AirMassPerCycleG / 12.5);
+        stoich.Update(Dt, sparkOn: true, idleThrottleOpening: 0, stoich.AirMassPerCycleG / 14.7);
+        rich.Update(Dt, sparkOn: true, idleThrottleOpening: 0, rich.AirMassPerCycleG / 12.5);
 
         // The extra fuel has no air to burn with, so it adds no torque, but it's still used up
         Assert.Equal(stoich.EngineTorqueNm, rich.EngineTorqueNm, 1e-9);
@@ -103,11 +103,11 @@ public class AirMathTests
     public void Update_FuelBurned_UsesTheRpmAtTheStartOfTheTick()
     {
         var engine = RunningEngine(throttle: 1);
-        engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, StoichFuel(engine)); // get the crank turning
+        engine.Update(Dt, sparkOn: true, idleThrottleOpening: 0, StoichFuel(engine)); // get the crank turning
         double rpm = engine.EngineSpeed;
         double fuelPerCycleG = StoichFuel(engine);
 
-        engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, fuelPerCycleG);
+        engine.Update(Dt, sparkOn: true, idleThrottleOpening: 0, fuelPerCycleG);
 
         Assert.Equal(Engine.FuelUsedG(fuelPerCycleG, rpm, Dt), engine.FuelBurnedG, 1e-9);
     }
@@ -120,7 +120,7 @@ public class AirMathTests
         var engine = NewEngine(); // never started
         engine.ThrottlePosition = 1;
 
-        engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, StoichFuel(engine));
+        engine.Update(Dt, sparkOn: true, idleThrottleOpening: 0, StoichFuel(engine));
 
         Assert.Equal(0, engine.FuelBurnedG);
         Assert.Equal(0, engine.EngineTorqueNm);

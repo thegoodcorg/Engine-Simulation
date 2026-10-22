@@ -37,7 +37,7 @@ public class FrictionTests
         // The base 0.97 bar only applies while the crank turns: a stopped engine isn't slowed, and doesn't spin backwards
         var engine = NewEngine();
 
-        engine.Update(Dt, sparkOn: false, idleFloorRpm: 0, fuelPerCycleG: 0);
+        engine.Update(Dt, sparkOn: false, idleThrottleOpening: 0, fuelPerCycleG: 0);
 
         Assert.Equal(0, engine.NetTorque);
         Assert.Equal(0, engine.EngineSpeed);
@@ -59,7 +59,7 @@ public class FrictionTests
         RunFor(engine, seconds: 2);
 
         Assert.True(engine.EngineSpeed < engine.MaxRpm - 500, $"ran up to {engine.EngineSpeed:F0} RPM");
-        Assert.Equal(rpmBefore, engine.EngineSpeed, 5); // steady to within 5 RPM over the last 2 seconds
+        Assert.Equal(rpmBefore, engine.EngineSpeed, 5.0); // steady to within 5 RPM over the last 2 seconds
     }
 
     // ---- Helpers ----
@@ -67,11 +67,11 @@ public class FrictionTests
     private static Engine NewEngine() =>
         new(95.5, 88.4, 144.2, 10.3, 6, new AmbientConditions(), FuelProperties.PumpGas);
 
-    // Run with spark on and the stoichiometric fuel for the air the engine is taking in, idle floor at 700 RPM
+    // Run with spark on and the stoichiometric fuel for the air the engine is taking in (no ECU idle opening: the pedal alone)
     private static void RunFor(Engine engine, double seconds)
     {
         int ticks = (int)Math.Round(seconds / Dt);
         for (int i = 0; i < ticks; i++)
-            engine.Update(Dt, sparkOn: true, idleFloorRpm: 700, fuelPerCycleG: engine.AirMassPerCycleG / FuelProperties.PumpGas.StoichiometricAfr);
+            engine.Update(Dt, sparkOn: true, idleThrottleOpening: 0, fuelPerCycleG: engine.AirMassPerCycleG / FuelProperties.PumpGas.StoichiometricAfr);
     }
 }
