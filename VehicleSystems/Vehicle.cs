@@ -29,12 +29,13 @@ public class Vehicle
     // ---- Values for Program.cs to display (read-only) ----
     public double Rpm => _engine.EngineSpeed;
     public double TorqueNm => _engine.NetTorque;              // torque at the crank, after friction (negative while the idle floor holds RPM up)
-    public double MafGPerS => _engine.AirflowGPerS;           // mass airflow, as an OBD2 reader shows it
+    public double MafGPerS => _engine.MafGPerS;           // mass airflow, as an OBD2 reader shows it
     public double ThrottlePosition => _engine.ThrottlePosition;
     public double FuelLevelL => _fuelSystem.FuelLevelL;
     public bool IsRunning => _engine.IsRunning;
     public bool OutOfFuel => _fuelSystem.FuelLevelL <= 0; // Program.cs ends the sim on this
     // Engine state, plus the ECU's message when there is one, e.g. "Engine running: fuel level low"
+    public double ManifoldPressureKpa => _engine.ManifoldPressureKpa;
     public string EngineStatus
     {
         get
@@ -92,7 +93,7 @@ public class Vehicle
             FuelLevelPercentage: _fuelSystem.FuelLevelPercentage,
             EngineRunning: _engine.IsRunning,
             Cranking: _starter.StarterEngaged,
-            MafGPerS: _engine.AirflowGPerS);
+            MafGPerS: _engine.MafGPerS);
     }
 
     public void SwitchBattery()
@@ -144,7 +145,7 @@ public class Vehicle
     }
 
 
-    // Open (+) or close (-) the throttle by the given amount; the setter keeps it between MinThrottle (6%) and 1
+    // Open (+) or close (-) the throttle by the given amount; the setter keeps it between 0 (released) and 1
     public void ThrottleControl(double amount)
     {
         _engine.ThrottlePosition += amount;

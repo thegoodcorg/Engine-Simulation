@@ -64,7 +64,7 @@ while (running)
     // Fixed widths overwrite the previous values completely, so nothing is left behind.
     Console.SetCursorPosition(0, displayTop);
     Console.WriteLine($"throttle={testVehicle.ThrottlePosition * 100,3:F0}%  rpm={testVehicle.Rpm,5:F0}  torque={testVehicle.TorqueNm,4:F0} Nm");
-    Console.WriteLine($"fuel={testVehicle.FuelLevelL,7:F3} L  maf={testVehicle.MafGPerS,6:F2} g/s");
+    Console.WriteLine($"fuel={testVehicle.FuelLevelL,7:F3} L  maf={testVehicle.MafGPerS,6:F2} g/s  map={GasHelper.ConvertKpaToPsi(testVehicle.ManifoldPressureKpa),5:F2} psi");
     Console.Write($"bat={testVehicle.BatteryVoltage,5:F1} V  {testVehicle.EngineStatus,-55}");
 
     // Empty tank ends the sim. A battery stall doesn't, so you can reconnect and restart.

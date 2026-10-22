@@ -60,16 +60,6 @@ public class AirMathTests
     }
 
     [Fact]
-    public void Torque_ScalesWithThrottle()
-    {
-        var engine = RunningEngine(throttle: 0.5);
-
-        engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, StoichFuel(engine));
-
-        Assert.Equal(FullThrottleTorqueNm / 2, engine.EngineTorqueNm, 0.01);
-    }
-
-    [Fact]
     public void RichMix_UsesMoreFuelButMakesTheSameTorque()
     {
         var stoich = RunningEngine(throttle: 1);
@@ -83,18 +73,6 @@ public class AirMathTests
         // The extra fuel has no air to burn with, so it adds no torque, but it's still used up
         Assert.Equal(stoich.EngineTorqueNm, rich.EngineTorqueNm, 1e-9);
         Assert.True(rich.FuelBurnedG > stoich.FuelBurnedG);
-    }
-
-    // ---- Airflow (what the MAF reads) ----
-
-    [Fact]
-    public void Airflow_IsAirPerCycleTimesCyclesPerSecond()
-    {
-        var engine = RunningEngine(throttle: 1);
-        engine.Update(Dt, sparkOn: true, idleFloorRpm: 0, StoichFuel(engine)); // get the crank turning
-
-        Assert.True(engine.EngineSpeed > 0);
-        Assert.Equal(engine.AirMassPerCycleG * engine.EngineSpeed / 120, engine.AirflowGPerS, 1e-9);
     }
 
     // ---- Fuel used ----

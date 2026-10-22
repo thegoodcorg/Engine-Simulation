@@ -185,10 +185,10 @@ public class Cylinder
         double cylinderTempK = TempK;
 
         // Side A = the port, side B = the cylinder, so positive = into the cylinder
-        double intakeKg = Valvetrain.MassFlowKgPerS(_valvetrain!.Intake.FlowAreaM2(startAngleDeg),
-            IntakePressurePa, IntakeTempK, cylinderPressurePa, cylinderTempK, _gasProperties) * stepSeconds;
-        double exhaustKg = Valvetrain.MassFlowKgPerS(_valvetrain.Exhaust.FlowAreaM2(startAngleDeg),
-            ExhaustPressurePa, _exhaustPortTempK, cylinderPressurePa, cylinderTempK, _gasProperties) * stepSeconds;
+        double intakeKg = GasHelper.MassFlowKgPerS(_valvetrain!.Intake.FlowAreaM2(startAngleDeg),
+            IntakePressurePa, IntakeTempK, cylinderPressurePa, cylinderTempK, _gasProperties, Valvetrain.DischargeCoefficient) * stepSeconds;
+        double exhaustKg = GasHelper.MassFlowKgPerS(_valvetrain.Exhaust.FlowAreaM2(startAngleDeg),
+            ExhaustPressurePa, _exhaustPortTempK, cylinderPressurePa, cylinderTempK, _gasProperties, Valvetrain.DischargeCoefficient) * stepSeconds;
 
         // Energy the gas carries across a valve = kg × cp × the temperature of the side it came from
         double energyJ = InternalEnergyJ;
