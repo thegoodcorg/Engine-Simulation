@@ -14,9 +14,10 @@ public class EngineControlUnitTests
         double fuelLevelPercentage = 100,
         bool engineRunning = true,
         bool cranking = false,
-        double mafGPerS = 0)
+        double mafGPerS = 0,
+        double pedalPosition = 0)
     {
-        return new EcuInputs(rpm, MaxRpm, batteryConnected, fuelLevelPercentage, engineRunning, cranking, mafGPerS);
+        return new EcuInputs(rpm, MaxRpm, batteryConnected, fuelLevelPercentage, engineRunning, cranking, mafGPerS, pedalPosition);
     }
 
     // ---- Run checks ----
@@ -158,19 +159,42 @@ public class EngineControlUnitTests
         Assert.True(ecu.Update(Dt, Inputs(rpm: MaxRpm - 100)).SparkOn);
     }
 
-    // ---- Idle floor ----
+    // ---- Idle throttle opening (#32) ----
 
-    [Fact]
-    public void IdleFloor_StaysWithinTwoPercentOfTarget()
+    [Theory]
+    [InlineData(300)]
+    [InlineData(700)]
+    [InlineData(1500)]
+    public void IdleThrottleOpening_StaysWithinItsLimits(double rpm)
     {
         var ecu = new EngineControlUnit(FuelProperties.PumpGas);
 
-        // 60 simulated seconds: plenty of new random targets
+        // 60 simulated seconds stuck at one RPM: the integral keeps pushing, the opening must stay clamped
         for (int i = 0; i < 1200; i++)
         {
-            double floor = ecu.Update(Dt, Inputs()).IdleFloorRpm;
-            Assert.InRange(floor, EngineControlUnit.TargetIdleRpm * 0.98, EngineControlUnit.TargetIdleRpm * 1.02);
+            double opening = ecu.Update(Dt, Inputs(rpm: rpm)).IdleThrottleOpening;
+            Assert.InRange(opening, 0, EngineControlUnit.MaxIdleThrottleOpening);
         }
+    }
+
+    [Fact]
+    public void IdleThrottleOpening_OpensMoreWhenIdlingLow()
+    {
+        double low = new EngineControlUnit(FuelProperties.PumpGas).Update(Dt, Inputs(rpm: 600)).IdleThrottleOpening;
+        double high = new EngineControlUnit(FuelProperties.PumpGas).Update(Dt, Inputs(rpm: 800)).IdleThrottleOpening;
+
+        Assert.True(low > high);
+    }
+
+    [Fact]
+    public void IdleThrottleOpening_HoldsStillWhileThePedalIsPressed()
+    {
+        var ecu = new EngineControlUnit(FuelProperties.PumpGas);
+        double beforePedal = ecu.Update(Dt, Inputs()).IdleThrottleOpening;
+
+        // Revving hard with the pedal down would otherwise wind the opening right down
+        for (int i = 0; i < 100; i++)
+            Assert.Equal(beforePedal, ecu.Update(Dt, Inputs(rpm: 5000, pedalPosition: 0.5)).IdleThrottleOpening);
     }
 
     // ---- Fuel (#5) ----

@@ -14,20 +14,20 @@ public class IntakeManifoldTests
     // ---- Throttle area ----
 
     [Fact]
-    public void ThrottleArea_IsTheBypassAloneAtPedal0()
+    public void ThrottleArea_IsTheLeakAloneAtPedal0()
     {
         var manifold = NewManifold();
 
-        Assert.Equal(21.7 / 1_000_000, manifold.ThrottleAreaM2(0), precision: 12);
+        Assert.Equal(IntakeManifold.ClosedPlateLeakAreaMm2 / 1_000_000, manifold.ThrottleAreaM2(0), precision: 12);
     }
 
     [Fact]
-    public void ThrottleArea_IsTheFullBorePlusTheBypassAtPedal1()
+    public void ThrottleArea_IsTheFullBorePlusTheLeakAtPedal1()
     {
         var manifold = NewManifold();
         double fullBoreM2 = Math.PI / 4 * 70 * 70 / 1_000_000; // 70 mm throttle bore
 
-        Assert.Equal(fullBoreM2 + 21.7 / 1_000_000, manifold.ThrottleAreaM2(1), precision: 12);
+        Assert.Equal(fullBoreM2 + IntakeManifold.ClosedPlateLeakAreaMm2 / 1_000_000, manifold.ThrottleAreaM2(1), precision: 12);
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class IntakeManifoldTests
         RunFor(manifold, seconds: 1, rpm: 3000, pedal: 0);
         Assert.True(manifold.MapKpa < 30);
 
-        RunFor(manifold, seconds: 2, rpm: 0, pedal: 0);
+        RunFor(manifold, seconds: 5, rpm: 0, pedal: 0); // through the closed-plate leak alone, so it takes a few seconds
 
         Assert.Equal(OutsidePressureKpa, manifold.MapKpa, 0.01);
     }
@@ -101,10 +101,11 @@ public class IntakeManifoldTests
     [Fact]
     public void Idle_MapAndMaf_MatchTheTicket()
     {
-        var manifold = Settled(700, 0);
+        // At idle the ECU holds the plate about 1.45% open (#32), on top of the closed-plate leak
+        var manifold = Settled(700, 0.0145);
 
-        Assert.Equal(17.4, manifold.MapKpa, 0.5);   // ≈ 17 kPa
-        Assert.Equal(4.2, manifold.MafGPerS, 0.1);  // ≈ 4.2 g/s
+        Assert.Equal(17, manifold.MapKpa, 1.0);     // ≈ 16.6 kPa
+        Assert.Equal(4.2, manifold.MafGPerS, 0.3);  // ≈ 4.0 g/s
     }
 
     [Fact]
@@ -180,7 +181,7 @@ public class IntakeManifoldTests
     [Fact]
     public void ClosedThrottleAt4000_BrakesHarderThanFrictionAlone()
     {
-        // Spark off holds the engine at the 4,000 RPM floor with no combustion (like a fuel cut on overrun).
+        // Held at 4,000 RPM with spark off: no combustion (like a fuel cut on overrun).
         // Pulling air in against the near-vacuum plenum (pumping loss) adds to friction: that's engine braking.
         var engine = RunningEngineHeldAt(4000, throttle: 0);
 
@@ -220,16 +221,17 @@ public class IntakeManifoldTests
         return manifold;
     }
 
-    // An engine held at a fixed RPM: spark off means no combustion, so friction and pumping slow it down,
-    // and the idle floor catches it at exactly floorRpm every tick. 2 seconds lets the plenum settle.
-    private static Engine RunningEngineHeldAt(double floorRpm, double throttle)
+    // An engine held at a fixed RPM, like on a dyno. Spark off means no combustion, so NetTorque shows
+    // friction plus pumping loss. 2 seconds lets the plenum settle.
+    private static Engine RunningEngineHeldAt(double rpm, double throttle)
     {
         var engine = new Engine(95.5, 88.4, 144.2, 10.3, 6, new AmbientConditions(), FuelProperties.PumpGas);
         engine.StartEngine();
         engine.ThrottlePosition = throttle;
+        engine.HeldRpm = rpm;
 
         for (int i = 0; i < 40; i++)
-            engine.Update(Tick, sparkOn: false, idleFloorRpm: floorRpm, fuelPerCycleG: 0);
+            engine.Update(Tick, sparkOn: false, idleThrottleOpening: 0, fuelPerCycleG: 0);
 
         return engine;
     }

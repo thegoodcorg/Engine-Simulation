@@ -31,6 +31,7 @@ public class Vehicle
     public double TorqueNm => _engine.NetTorque;              // torque at the crank, after friction (negative while the idle floor holds RPM up)
     public double MafGPerS => _engine.MafGPerS;           // mass airflow, as an OBD2 reader shows it
     public double ThrottlePosition => _engine.ThrottlePosition;
+    public double ThrottlePlateOpening => _engine.ThrottlePlateOpening; // pedal + the ECU's idle opening: where the plate actually is
     public double FuelLevelL => _fuelSystem.FuelLevelL;
     public bool IsRunning => _engine.IsRunning;
     public bool OutOfFuel => _fuelSystem.FuelLevelL <= 0; // Program.cs ends the sim on this
@@ -77,7 +78,7 @@ public class Vehicle
             UpdateStarter(dt, ecu);
         }
 
-        _engine.Update(dt, _ignitionSystem.SparkOn, ecu.IdleFloorRpm, ecu.FuelPerCycleG);
+        _engine.Update(dt, _ignitionSystem.SparkOn, ecu.IdleThrottleOpening, ecu.FuelPerCycleG);
 
         // Drain what the engine used: grams ÷ 1000 = kg, then ÷ density (kg/L) = liters
         _fuelSystem.Drain(_engine.FuelBurnedG / 1000 / _fuelSystem.Fuel.DensityKgPerL);
@@ -93,7 +94,8 @@ public class Vehicle
             FuelLevelPercentage: _fuelSystem.FuelLevelPercentage,
             EngineRunning: _engine.IsRunning,
             Cranking: _starter.StarterEngaged,
-            MafGPerS: _engine.MafGPerS);
+            MafGPerS: _engine.MafGPerS,
+            PedalPosition: _engine.ThrottlePosition);
     }
 
     public void SwitchBattery()

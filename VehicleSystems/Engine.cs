@@ -87,9 +87,14 @@ public class Engine
         _fuel = fuel;
         _manifold = new IntakeManifold(ambientConditions, DisplacementLiters);
     }
+    // The engine leaves the starter at cranking speed and has to pick up from there under its own power.
+    // (Until there was no idle floor, starting just jumped straight to idle. Real cranking torque is #20.)
+    public const double CrankingRpm = 200;
+
     public void StartEngine()
     {
         IsRunning = true;
+        EngineSpeed = Math.Max(EngineSpeed, CrankingRpm);
     }
 
     // Engine stops because something went wrong (battery cut, fuel ran out)
@@ -104,11 +109,31 @@ public class Engine
         IsRunning = false;
     }
 
-    // Advance the engine by dt seconds. fuelPerCycleG is what the ECU decided to inject.
-    public void Update(double dt, bool sparkOn, double idleFloorRpm, double fuelPerCycleG)
+    // Throttle plate opening (0–1) this tick: the pedal plus whatever the ECU adds to hold idle.
+    // Drive-by-wire: the pedal is only a request, and the ECU decides where the plate actually sits.
+    public double ThrottlePlateOpening { get; private set; }
+
+    // Hold the crank at a fixed RPM whatever torque the engine makes, like a dyno absorbing or supplying the difference
+    // (null = free running). Torques are still worked out normally, so NetTorque shows what the engine would do.
+    // Used by tests and the dyno (#30). Setting it puts the crank at that speed straight away.
+    public double? HeldRpm
+    {
+        get => _heldRpm;
+        set
+        {
+            _heldRpm = value;
+            if (value is double rpm)
+                EngineSpeed = rpm;
+        }
+    }
+    private double? _heldRpm;
+
+    // Advance the engine by dt seconds. idleThrottleOpening and fuelPerCycleG are what the ECU decided this tick.
+    public void Update(double dt, bool sparkOn, double idleThrottleOpening, double fuelPerCycleG)
     {
         bool combusting = IsRunning && sparkOn;
-        _manifold.Update(dt, EngineSpeed, ThrottlePosition);
+        ThrottlePlateOpening = Math.Clamp(ThrottlePosition + idleThrottleOpening, 0, 1);
+        _manifold.Update(dt, EngineSpeed, ThrottlePlateOpening);
 
         // 1. Torque from the fuel that burns, minus what friction takes away.
         //    Fuel needs air to burn: in a rich mix the extra fuel goes out unburned, so the air sets a cap.
@@ -135,11 +160,14 @@ public class Engine
         EngineSpeed += angularAcceleration * 60 / (2 * Math.PI) * dt;
 
 
-        // 4. While running, the ECU's idle floor holds RPM up. When off, it spins down to 0.
+        // 4. No idle floor: idle is held by the ECU's throttle plate opening, so RPM can fall to 0 (and the ECU stalls the engine).
         //    MaxRpm stays as a hard ceiling, because one 0.05 s tick at full throttle can overshoot
         //    the rev limiter by several hundred RPM before it gets a chance to cut spark.
-        double floor = IsRunning ? idleFloorRpm : 0;
-        EngineSpeed = Math.Clamp(EngineSpeed, floor, MaxRpm);
+        EngineSpeed = Math.Clamp(EngineSpeed, 0, MaxRpm);
+
+        // 5. Held (dyno or test): the crank stays put whatever the torque
+        if (_heldRpm is double heldRpm)
+            EngineSpeed = heldRpm;
     }
 
     private double TotalDisplacement()
