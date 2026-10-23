@@ -33,6 +33,13 @@ public class VehicleBody
         SpeedMs = initialSpeedMs;
     }
 
+    // While the clutch is locked (#38), the truck's speed follows the engine through the gearing,
+    // so the Vehicle sets it directly instead of stepping it from forces. Never below 0.
+    public void SetSpeedMs(double speedMs)
+    {
+        SpeedMs = Math.Max(speedMs, 0);
+    }
+
     // Move the truck on by dt seconds.
     //   driveForceN:   push from the drivetrain at the tyres (0 in this ticket)
     //   brakePedal:    0 = off, 1 = full braking

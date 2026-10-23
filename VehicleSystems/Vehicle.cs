@@ -1,4 +1,6 @@
+using EngineSim.Constants;
 using EngineSim.VehicleSystems.Body;
+using EngineSim.VehicleSystems.Driveline;
 using EngineSim.VehicleSystems.Electrical;
 
 namespace EngineSim;
@@ -14,10 +16,23 @@ public class Vehicle
     private readonly Starter _starter;
     private readonly IgnitionSystem _ignitionSystem;
     private readonly VehicleBody _body;
+    private readonly Drivetrain _drivetrain;
 
     // Driver and road inputs (#37). The controls ticket sets these from the keyboard.
     public double BrakePedal { get; set; }      // 0 = off, 1 = full braking
     public double GradePercent { get; set; }    // hill steepness: 5 = climbing 5 m per 100 m, negative = downhill. 0 = flat
+
+    // Drivetrain (#38)
+    public double ClutchEngagement                // 0 = clutch pedal down, 1 = pedal fully out
+    {
+        get => _drivetrain.Clutch.Engagement;
+        set => _drivetrain.Clutch.Engagement = value;
+    }
+    public int Gear => _drivetrain.Gearbox.Gear;              // 0 = neutral, 1–9
+    public ClutchState ClutchState => _drivetrain.Clutch.State;
+
+    // Change gear. Refused (false) unless the clutch pedal is all the way down.
+    public bool ShiftTo(int gear) => _drivetrain.Gearbox.TryShift(gear, clutchDisengaged: ClutchEngagement == 0);
 
     private bool _startKeyHeld;         // set by Program.cs every tick
     private string? _diagnosticMessage; // latest ECU message: a refusal, stall reason or warning, or null
@@ -31,6 +46,7 @@ public class Vehicle
         _starter = new Starter();
         _ignitionSystem = new IgnitionSystem();
         _body = new VehicleBody();
+        _drivetrain = new Drivetrain();
     }
 
     // ---- Values for Program.cs to display (read-only) ----
@@ -90,13 +106,21 @@ public class Vehicle
             UpdateStarter(dt, ecu);
         }
 
-        _engine.Update(dt, _ignitionSystem.SparkOn, ecu.IdleThrottleOpening, ecu.FuelPerCycleG);
+
+        double roadLoadN = _body.RollingResistanceN + _body.AeroDragN + _body.GradeForceN + _body.BrakeForceN;
+
+        var coupling = _drivetrain.Update(dt, _engine.EngineSpeed, _engine.NetTorque, _engine.Inertia, _body.SpeedMs, roadLoadN, VehicleBody.massKg);
+        _engine.Update(dt, _ignitionSystem.SparkOn, ecu.IdleThrottleOpening, ecu.FuelPerCycleG, coupling.LoadTorqueNm, coupling.ExtraInertiaKgM2);
 
         // Drain what the engine used: grams ÷ 1000 = kg, then ÷ density (kg/L) = liters
         _fuelSystem.Drain(_engine.FuelBurnedG / 1000 / _fuelSystem.Fuel.DensityKgPerL);
 
-        // The truck on the road. No drivetrain yet, so no drive force: it only coasts, brakes and rolls on hills
-        _body.Update(dt, driveForceN: 0, BrakePedal, GradePercent, _engine.OutsideAirDensityKgM3);
+        _body.Update(dt, coupling.DriveForceN, BrakePedal, GradePercent, _engine.OutsideAirDensityKgM3);
+
+        if (coupling.State == ClutchState.Locked)
+        {
+            _body.SetSpeedMs(_drivetrain.SpeedAtRpmMs(Rpm));
+        }
     }
 
     // Snapshot of everything the ECU reads this tick
