@@ -1,6 +1,7 @@
 ﻿using EngineSim;
 using EngineSim.Constants;
 using EngineSim.Helpers;
+using EngineSim.VehicleSystems.Driveline;
 
 AmbientConditions idealConditions = new();
 Engine testEngine = new(95.5, 88.4, 144.2, 10.3, 6, idealConditions, FuelProperties.PumpGas); // bore, stroke, rod length (mm), compression ratio, cylinders
@@ -17,13 +18,14 @@ Console.WriteLine($"Redline = {testVehicle.MaxRpm} RPM");
 Console.WriteLine($"Peak torque = {testVehicle.PeakTorqueNm:F0} Nm (at the crank, after friction)");
 
 Console.WriteLine();
-Console.WriteLine("1 = battery on/off, hold 3 = start engine, 4 = stop engine, W = throttle up, S = throttle down, Q = quit");
+Console.WriteLine("1 = battery on/off, hold 3 = start engine, 4 = stop engine, W/S = throttle up/down, Q = quit");
+Console.WriteLine("hold Space = clutch, Up/Down = shift, N = neutral, hold B = brake, PageUp/PageDown = grade");
 Console.CursorVisible = false;
 
-// Reserve three lines for the live display and remember where they start.
+// Reserve four lines for the live display and remember where they start.
 // Printing them first means the console has already scrolled, so the row number stays valid.
 // Each line stays under 80 characters so it never wraps onto the next one.
-const int displayLines = 3;
+const int displayLines = 4;
 for (int i = 0; i < displayLines; i++)
     Console.WriteLine();
 int displayTop = Console.CursorTop - displayLines;
@@ -50,6 +52,22 @@ while (running)
             case ConsoleKey.S:
                 testVehicle.ThrottleControl(-throttleStep);
                 break;
+            // Shifting needs the clutch pedal down (hold Space first); otherwise the dash says so
+            case ConsoleKey.UpArrow:
+                testVehicle.ShiftUp();
+                break;
+            case ConsoleKey.DownArrow:
+                testVehicle.ShiftDown();
+                break;
+            case ConsoleKey.N:
+                testVehicle.SelectNeutral();
+                break;
+            case ConsoleKey.PageUp:
+                testVehicle.ChangeGrade(+1);
+                break;
+            case ConsoleKey.PageDown:
+                testVehicle.ChangeGrade(-1);
+                break;
             case ConsoleKey.Q:
             case ConsoleKey.Escape:
                 running = false;
@@ -57,7 +75,10 @@ while (running)
         }
     }
 
+    // Held keys: ReadKey only sees presses, so ask whether they're down right now
     testVehicle.SetStartKeyHeld(KeyState.IsDown(ConsoleKey.D3) || KeyState.IsDown(ConsoleKey.NumPad3));
+    testVehicle.SetClutchPedalHeld(KeyState.IsDown(ConsoleKey.Spacebar));
+    testVehicle.SetBrakeHeld(KeyState.IsDown(ConsoleKey.B));
     testVehicle.Update(dt);
 
     // Jump back to the top of the display and redraw every line in place.
@@ -65,8 +86,10 @@ while (running)
     Console.SetCursorPosition(0, displayTop);
     Console.WriteLine($"throttle={testVehicle.ThrottlePosition * 100,3:F0}%  rpm={testVehicle.Rpm,5:F0}  torque={testVehicle.TorqueNm,4:F0} Nm");
     Console.WriteLine($"fuel={testVehicle.FuelLevelL,7:F3} L  maf={testVehicle.MafGPerS,6:F2} g/s  map={GasHelper.ConvertKpaToPsi(testVehicle.ManifoldPressureKpa),5:F2} psi");
-    Console.Write($"bat={testVehicle.BatteryVoltage,5:F1} V  {testVehicle.EngineStatus,-55}");
-
+    Console.WriteLine($"speed={testVehicle.SpeedKmh,4:F0} km/h ({testVehicle.SpeedMph,3:F0} mph)  gear={GearLabel(testVehicle.Gear)}  " +
+                      $"clutch={ClutchLabel(testVehicle.ClutchState),-8}  brake={testVehicle.BrakePedal * 100,3:F0}%  grade={testVehicle.GradePercent,3:+0;-0;0}%");
+    string status = testVehicle.DriverMessage is null ? testVehicle.EngineStatus : $"{testVehicle.EngineStatus} | {testVehicle.DriverMessage}";
+    Console.WriteLine($"bat={testVehicle.BatteryVoltage,5:F1} V  {status,-65}");
     // Empty tank ends the sim. A battery stall doesn't, so you can reconnect and restart.
     if (testVehicle.OutOfFuel)
     {
@@ -80,3 +103,13 @@ while (running)
 
 Console.CursorVisible = true;
 Console.WriteLine();
+
+// Dash labels: N for neutral; "in" for the clutch pedal down
+static string GearLabel(int gear) => gear == 0 ? "N" : gear.ToString();
+
+static string ClutchLabel(ClutchState state) => state switch
+{
+    ClutchState.Disengaged => "in",
+    ClutchState.Slipping => "slipping",
+    _ => "locked",
+};
