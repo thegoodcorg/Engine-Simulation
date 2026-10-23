@@ -66,10 +66,10 @@ public class OpenCycleTests
     [InlineData(30)]
     public void HeatLoss_StaysARealNumber_AtLowRpmWithTheCamShifted(double intakeShiftDeg)
     {
-        var cylinder = OpenCylinder(1000, intakeShiftDeg);
+        var cylinder = OpenCylinder(intakeShiftDeg);
 
         for (int cycle = 0; cycle < 3; cycle++)
-            cylinder.RunOpenCycle(Engine.CrankStepDeg);
+            cylinder.RunOpenCycle(Engine.CrankStepDeg, 1000);
 
         Assert.False(double.IsNaN(cylinder.HeatLostJ));
         Assert.False(double.IsNaN(cylinder.TempK));
@@ -79,9 +79,9 @@ public class OpenCycleTests
     [Fact]
     public void SparkOff_BurnsNothing_AndStillBreathes()
     {
-        var cylinder = OpenCylinder(3000, sparkAdvanceDeg: null);
+        var cylinder = OpenCylinder(sparkAdvanceDeg: null);
 
-        var result = cylinder.RunUntilSettled(Engine.CrankStepDeg);
+        var result = cylinder.RunUntilSettled(Engine.CrankStepDeg, 3000);
 
         Assert.Equal(0, cylinder.HeatReleasedJ);
         Assert.True(result.IndicatedWorkJ < 0); // pumping air in and out costs work with nothing burning
@@ -93,13 +93,13 @@ public class OpenCycleTests
     {
         var sealedCylinder = new Cylinder(Geometry, GasProperties.Air, 540, 101_325, 288.15);
 
-        Assert.Throws<InvalidOperationException>(() => sealedCylinder.RunOpenCycle(Engine.CrankStepDeg));
+        Assert.Throws<InvalidOperationException>(() => sealedCylinder.RunOpenCycle(Engine.CrankStepDeg, 3000));
     }
 
     // ---- Helpers ----
 
     // Full throttle (ambient intake), 20° spark, walls at 450 K, started at firing TDC
-    private static Cylinder OpenCylinder(double rpm, double intakeShiftDeg = 0, double? sparkAdvanceDeg = SparkAdvanceDeg)
+    private static Cylinder OpenCylinder(double intakeShiftDeg = 0, double? sparkAdvanceDeg = SparkAdvanceDeg)
     {
         var valvetrain = new Valvetrain();
         valvetrain.Intake.CenterlineDeg += intakeShiftDeg;
@@ -109,13 +109,12 @@ public class OpenCycleTests
             valvetrain: valvetrain,
             fuel: FuelProperties.PumpGas)
         {
-            Rpm = rpm,
             SparkAdvanceDeg = sparkAdvanceDeg,
         };
     }
 
     private static CycleResult SettledCycle(double rpm, double intakeShiftDeg = 0) =>
-        OpenCylinder(rpm, intakeShiftDeg).RunUntilSettled(Engine.CrankStepDeg);
+        OpenCylinder(intakeShiftDeg).RunUntilSettled(Engine.CrankStepDeg, rpm);
 
     // Sweep the intake centerline and return the shift (degrees, negative = earlier) that gives the highest VE
     private static double BestIntakeShiftDeg(double rpm)

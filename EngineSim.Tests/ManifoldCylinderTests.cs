@@ -105,7 +105,6 @@ public class ManifoldCylinderTests
                 valvetrain: new Valvetrain(),
                 fuel: FuelProperties.PumpGas)
             {
-                Rpm = rpm,
                 SparkAdvanceDeg = 20,
                 ExhaustPressurePa = ambientPressurePa + Engine.ExhaustBackPressureAboveAmbientPa,
             });
@@ -131,7 +130,7 @@ public class ManifoldCylinderTests
                 {
                     cylinder.IntakePressurePa = manifold.PressurePa;
                     cylinder.IntakeTempK = ambient.AirTempK;   // the plenum stays at outside temperature
-                    cylinder.Step(stepDeg);
+                    cylinder.Step(stepDeg, rpm);
                     totalIntakeFlowKgPerS += cylinder.IntakeFlowKgPerS;
                 }
                 manifold.Step(stepSeconds, pedal, totalIntakeFlowKgPerS);

@@ -78,7 +78,8 @@ public class IdleControlTests
         for (int i = 0; i < 200; i++) // 10 s
         {
             EcuOutputs outputs = ecu.Update(Dt, SensorsFor(engine));
-            engine.Update(Dt, outputs.SparkOn, idleThrottleOpening: 0, outputs.FuelPerCycleG);
+            engine.SparkAdvanceDeg = outputs.SparkOn ? outputs.SparkAdvanceDeg : null;
+            engine.Update(Dt, idleThrottleOpening: 0);
             if (!outputs.AllowRun)
                 engine.Stall();
         }

@@ -1,4 +1,5 @@
 using EngineSim.Constants;
+using EngineSim.Enums;
 using EngineSim.VehicleSystems.Body;
 using EngineSim.VehicleSystems.Driveline;
 using EngineSim.VehicleSystems.Electrical;
@@ -134,7 +135,7 @@ public class Vehicle
     public int CylinderCount => _engine.CylinderCount;
     public double DisplacementLiters => _engine.DisplacementLiters;
     public double MaxRpm => _engine.MaxRpm;
-    public double PeakTorqueNm => _engine.MaxBrakeTorqueNm; // at the crank, after friction
+    public double RealTimeFactor => _engine.RealTimeFactor; // how fast the sim ran last tick compared with real time (#29)
 
     public void Update(double dt)
     {
@@ -162,7 +163,11 @@ public class Vehicle
         double roadLoadN = _body.RollingResistanceN + _body.AeroDragN + _body.GradeForceN + _body.BrakeForceN;
 
         var coupling = _drivetrain.Update(dt, _engine.EngineSpeed, _engine.NetTorque, _engine.Inertia, _body.SpeedMs, roadLoadN, VehicleBody.massKg);
-        _engine.Update(dt, _ignitionSystem.SparkOn, ecu.IdleThrottleOpening, ecu.FuelPerCycleG, coupling.LoadTorqueNm, coupling.ExtraInertiaKgM2);
+        // Spark timing from the ECU; null while the spark is off (key off, rev limiter, stall), so nothing is injected or burned.
+        // The starter turns the crank while it's engaged, so the cylinders fill and fire before it lets go.
+        _engine.SparkAdvanceDeg = _ignitionSystem.SparkOn ? ecu.SparkAdvanceDeg : null;
+        _engine.StarterEngaged = _starter.StarterEngaged;
+        _engine.Update(dt, ecu.IdleThrottleOpening, coupling.LoadTorqueNm, coupling.ExtraInertiaKgM2);
 
         // Drain what the engine used: grams ÷ 1000 = kg, then ÷ density (kg/L) = liters
         _fuelSystem.Drain(_engine.FuelBurnedG / 1000 / _fuelSystem.Fuel.DensityKgPerL);

@@ -1,5 +1,6 @@
 ﻿using EngineSim;
 using EngineSim.Constants;
+using EngineSim.Enums;
 using EngineSim.Helpers;
 using EngineSim.VehicleSystems.Driveline;
 
@@ -15,7 +16,6 @@ Console.WriteLine($"Cyl bore = {testVehicle.BoreMm}mm / Cyl stroke = {testVehicl
 Console.WriteLine($"Rod length = {testVehicle.RodLengthMm}mm / Compression ratio = {testVehicle.CompressionRatio}:1");
 Console.WriteLine($"Displacement = {testVehicle.DisplacementLiters:F2} L");
 Console.WriteLine($"Redline = {testVehicle.MaxRpm} RPM");
-Console.WriteLine($"Peak torque = {testVehicle.PeakTorqueNm:F0} Nm (at the crank, after friction)");
 
 Console.WriteLine();
 Console.WriteLine("1 = battery on/off, hold 3 = start engine, 4 = stop engine, W/S = throttle up/down, Q = quit");
@@ -84,7 +84,8 @@ while (running)
     // Jump back to the top of the display and redraw every line in place.
     // Fixed widths overwrite the previous values completely, so nothing is left behind.
     Console.SetCursorPosition(0, displayTop);
-    Console.WriteLine($"throttle={testVehicle.ThrottlePosition * 100,3:F0}%  rpm={testVehicle.Rpm,5:F0}  torque={testVehicle.TorqueNm,4:F0} Nm");
+    // sim = how fast the crank-angle model ran compared with real time: under 1.0x means the sim is slower than real life
+    Console.WriteLine($"throttle={testVehicle.ThrottlePosition * 100,3:F0}%  rpm={testVehicle.Rpm,5:F0}  torque={testVehicle.TorqueNm,4:F0} Nm  sim={testVehicle.RealTimeFactor,5:F1}x");
     Console.WriteLine($"fuel={testVehicle.FuelLevelL,7:F3} L  maf={testVehicle.MafGPerS,6:F2} g/s  map={GasHelper.ConvertKpaToPsi(testVehicle.ManifoldPressureKpa),5:F2} psi");
     Console.WriteLine($"speed={testVehicle.SpeedKmh,4:F0} km/h ({testVehicle.SpeedMph,3:F0} mph)  gear={GearLabel(testVehicle.Gear)}  " +
                       $"clutch={ClutchLabel(testVehicle.ClutchState),-8}  brake={testVehicle.BrakePedal * 100,3:F0}%  grade={testVehicle.GradePercent,3:+0;-0;0}%");

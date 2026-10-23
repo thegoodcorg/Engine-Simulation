@@ -1,4 +1,5 @@
 using EngineSim.Constants;
+using EngineSim.Enums;
 using EngineSim.VehicleSystems.Body;
 using EngineSim.VehicleSystems.Driveline;
 
@@ -228,7 +229,7 @@ public class DrivetrainTests
     }
 
     [Fact]
-    public void OnAFivePercentClimb_AFixedThrottleSettlesAtALowerSpeed()
+    public void OnAFivePercentClimb_AFixedThrottleIsSlower()
     {
         double flatKmh = SettledSpeedKmh(gradePercent: 0);
         double climbKmh = SettledSpeedKmh(gradePercent: 5);
@@ -270,10 +271,12 @@ public class DrivetrainTests
     }
 
     // Speed after 60 s at 30% throttle in 4th, starting locked at 60 km/h
+    // Speed after 10 s at 30% throttle in 4th from 60 km/h. Long enough for the climb to fall behind;
+    // a full settle takes a minute, which is minutes of real time on the crank-angle engine.
     private static double SettledSpeedKmh(double gradePercent)
     {
         var truck = new DrivenTruck(gear: 4, speedKmh: 60, engineRpm: 0, throttle: 0.3, startLocked: true) { GradePercent = gradePercent };
-        for (int i = 0; i < 1200; i++)
+        for (int i = 0; i < 200; i++)
             truck.Step();
         return truck.Body.SpeedKmh;
     }
@@ -282,7 +285,7 @@ public class DrivetrainTests
         new(95.5, 88.4, 144.2, 10.3, 6, new AmbientConditions(), FuelProperties.PumpGas);
 
     // Engine + drivetrain + body stepped the way Vehicle.Update does, without the ECU, starter or battery,
-    // so a test can start in any gear at any speed. Spark is on whenever the engine is running, with stoichiometric fuel.
+    // so a test can start in any gear at any speed. Spark is on (at the ECU's 20°) whenever the engine is running.
     private sealed class DrivenTruck
     {
         public Engine Engine { get; } = NewEngine();
@@ -302,8 +305,9 @@ public class DrivetrainTests
             // Locked: put the engine at the speed that matches the truck through the gears, and let the plenum settle there
             double startRpm = startLocked ? Drivetrain.GearboxInputRpm(Body.SpeedMs) : engineRpm;
             Engine.HeldRpm = startRpm;
+            Engine.SparkAdvanceDeg = running ? SparkAdvanceDeg : null;
             for (int i = 0; i < 20; i++)
-                Engine.Update(Dt, sparkOn: running, idleThrottleOpening: 0, fuelPerCycleG: Fuel());
+                Engine.Update(Dt, idleThrottleOpening: 0);
             Engine.HeldRpm = null;
             if (!running)
                 Engine.Stall();
@@ -318,13 +322,14 @@ public class DrivetrainTests
             DrivetrainCoupling coupling = Drivetrain.Update(Dt, Engine.EngineSpeed, Engine.NetTorque, Engine.Inertia,
                 Body.SpeedMs, roadLoadN, MassKg);
 
-            Engine.Update(Dt, sparkOn: Engine.IsRunning, idleThrottleOpening: 0, Fuel(), coupling.LoadTorqueNm, coupling.ExtraInertiaKgM2);
+            Engine.SparkAdvanceDeg = Engine.IsRunning ? SparkAdvanceDeg : null;
+            Engine.Update(Dt, idleThrottleOpening: 0, coupling.LoadTorqueNm, coupling.ExtraInertiaKgM2);
 
             Body.Update(Dt, coupling.DriveForceN, brakePedal: 0, GradePercent, SeaLevelDensity);
             if (coupling.State == ClutchState.Locked)
                 Body.SetSpeedMs(Drivetrain.SpeedAtRpmMs(Engine.EngineSpeed));
         }
 
-        private double Fuel() => Engine.IsRunning ? Engine.AirMassPerCycleG / FuelProperties.PumpGas.StoichiometricAfr : 0;
+        private const double SparkAdvanceDeg = 20;   // the ECU's spark advance
     }
 }

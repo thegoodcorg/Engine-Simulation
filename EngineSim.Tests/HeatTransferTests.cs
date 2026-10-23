@@ -16,8 +16,8 @@ public class HeatTransferTests
     [Fact]
     public void FullLoadAt3000Rpm_Loses15To25PercentOfTheFuelEnergy()
     {
-        var cylinder = FiredCylinder(rpm: 3000);
-        cylinder.RunCycle(Engine.CrankStepDeg);
+        var cylinder = FiredCylinder();
+        cylinder.RunCycle(Engine.CrankStepDeg, 3000);
 
         double fractionLost = cylinder.HeatLostJ / cylinder.HeatReleasedJ;
 
@@ -28,10 +28,10 @@ public class HeatTransferTests
     public void LowRpm_LosesABiggerShareThanHighRpm()
     {
         // More time per cycle at low RPM, so the gas spends longer touching the walls
-        var slow = FiredCylinder(rpm: 1000);
-        var fast = FiredCylinder(rpm: 6000);
-        slow.RunCycle(Engine.CrankStepDeg);
-        fast.RunCycle(Engine.CrankStepDeg);
+        var slow = FiredCylinder();
+        var fast = FiredCylinder();
+        slow.RunCycle(Engine.CrankStepDeg, 1000);
+        fast.RunCycle(Engine.CrankStepDeg, 6000);
 
         Assert.True(slow.HeatLostJ / slow.HeatReleasedJ > fast.HeatLostJ / fast.HeatReleasedJ);
     }
@@ -68,9 +68,8 @@ public class HeatTransferTests
         // No combustion: the gas is squeezed and let out again, but some of the squeezing heat leaks into the walls,
         // so the expansion gives back a little less than the compression took
         var cylinder = new Cylinder(Geometry, GasProperties.Air, BdcDeg, StartPressurePa, StartTemperatureK, heatTransfer: NewHeatTransfer());
-        cylinder.Rpm = 3000;
 
-        double workJ = cylinder.RunCycle(Engine.CrankStepDeg);
+        double workJ = cylinder.RunCycle(Engine.CrankStepDeg, 3000);
 
         Assert.True(workJ < 0, $"work was {workJ} J");
         Assert.True(workJ > -0.1 * 273.9, $"work was {workJ} J"); // "slightly": under 10% of the ~274 J compression work
@@ -79,10 +78,10 @@ public class HeatTransferTests
     [Fact]
     public void EnergyCheck_StillHoldsWithHeatLoss()
     {
-        var cylinder = FiredCylinder(rpm: 3000);
+        var cylinder = FiredCylinder();
         double startEnergyJ = cylinder.InternalEnergyJ;
 
-        double workJ = cylinder.RunCycle(Engine.CrankStepDeg);
+        double workJ = cylinder.RunCycle(Engine.CrankStepDeg, 3000);
         double energyChangeJ = cylinder.InternalEnergyJ - startEnergyJ;
 
         // First law: heat in − heat out either did work on the piston or is still in the gas
@@ -95,7 +94,7 @@ public class HeatTransferTests
         var cylinder = new Cylinder(Geometry, GasProperties.Air, BdcDeg, StartPressurePa, StartTemperatureK,
             Combustion.FromSpark(20, StoichFuelG(), Fuel));
 
-        cylinder.RunCycle(Engine.CrankStepDeg);
+        cylinder.RunCycle(Engine.CrankStepDeg, 3000);
 
         Assert.Equal(0, cylinder.HeatLostJ);
     }
@@ -105,13 +104,9 @@ public class HeatTransferTests
     private static HeatTransfer NewHeatTransfer() => new(Geometry, GasProperties.Air, Engine.WallTempK);
 
     // Full load: stoichiometric fuel, 20° spark advance, walls at 450 K
-    private static Cylinder FiredCylinder(double rpm)
-    {
-        var cylinder = new Cylinder(Geometry, GasProperties.Air, BdcDeg, StartPressurePa, StartTemperatureK,
+    private static Cylinder FiredCylinder() =>
+        new(Geometry, GasProperties.Air, BdcDeg, StartPressurePa, StartTemperatureK,
             Combustion.FromSpark(20, StoichFuelG(), Fuel), NewHeatTransfer());
-        cylinder.Rpm = rpm;
-        return cylinder;
-    }
 
     // Fuel for a stoichiometric mix with the air the cylinder traps (g)
     private static double StoichFuelG()

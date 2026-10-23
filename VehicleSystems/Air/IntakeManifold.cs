@@ -19,6 +19,8 @@ public class IntakeManifold
     // Kept small so the ECU has to hold the plate a little open to idle, and can open it more or less as needed (#32).
     public const double ClosedPlateLeakAreaMm2 = 10;
     private const double PlenumVolumeLiters = 4.0;         // about one displacement
+    // Mean-value mode only (Update): the cylinders fill to 90% of their volume. Crank-angle mode (Step) gets the real fill from the cylinders.
+    private const double MeanValueVolumetricEfficiency = 0.9;
     public const double DefaultSubStepSeconds = 0.001;     // the plenum reacts in ~20–50 ms, so step it at 1 ms, not once per 50 ms tick
 
     private readonly AmbientConditions _ambientConditions;
@@ -151,12 +153,12 @@ public class IntakeManifold
     // Air the engine pulls out of the plenum (kg/s) if the plenum were at plenumPressurePa. Same as #5's formula, but with
     // plenum density instead of outside density, and no throttle factor: the throttle is the hole above now.
     //   plenumDensity    = plenumPressurePa / (gasConstant × outsideTempK)
-    //   airPerCycleKg    = Engine.VolumetricEfficiency × plenumDensity × displacementM3
+    //   airPerCycleKg    = MeanValueVolumetricEfficiency × plenumDensity × displacementM3
     //   engineFlowKgPerS = airPerCycleKg × rpm / 120          (a four-stroke fills every cylinder once per two revolutions)
     private double EngineFlowAtKgPerS(double plenumPressurePa, double rpm)
     {
         double plenumDensityKgPerM3 = plenumPressurePa / (GasProperties.Air.GasConstantJPerKgK * _ambientConditions.AirTempK);
-        double airPerCycleKg = Engine.VolumetricEfficiency * plenumDensityKgPerM3 * _displacementM3;
+        double airPerCycleKg = MeanValueVolumetricEfficiency * plenumDensityKgPerM3 * _displacementM3;
         return airPerCycleKg * rpm / 120;
     }
 }

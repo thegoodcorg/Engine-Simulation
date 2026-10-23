@@ -1,3 +1,5 @@
+using EngineSim.Enums;
+
 namespace EngineSim.VehicleSystems.Driveline;
 
 // What one Drivetrain.Update decided: what the engine feels from the vehicle, and what the vehicle gets from the engine (#38)

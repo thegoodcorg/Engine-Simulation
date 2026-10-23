@@ -9,6 +9,7 @@ public class CylinderTests
     private const double BdcDeg = 180;
     private const double StartPressurePa = 101_325;
     private const double StartTemperatureK = 288.15;
+    private const double Rpm = 3000;               // no heat transfer in these tests, so the speed doesn't change the result
 
     private static readonly CylinderGeometry Geometry = new(95.5, 88.4, 144.2, 10.3);
 
@@ -79,6 +80,6 @@ public class CylinderTests
     {
         int steps = (int)Math.Round(degrees / stepDeg);
         for (int i = 0; i < steps; i++)
-            cylinder.Step(stepDeg);
+            cylinder.Step(stepDeg, Rpm);
     }
 }

@@ -3,130 +3,29 @@ using EngineSim.Constants;
 
 namespace EngineSim.Tests;
 
-// Ticket #5: torque from the air the engine takes in, and the fuel that air burns
+// Ticket #5's fuel plumbing: the engine reports the fuel it used, and the Vehicle drains it from the tank.
+// #5's torque math (air × fuel energy × a fixed efficiency) was replaced by the crank-angle model in #29;
+// torque and fuel per cycle are tested in CrankAngleEngineTests now.
 public class AirMathTests
 {
     private const double Dt = 0.05;
     private static readonly FuelProperties Fuel = FuelProperties.PumpGas;
 
-    // Hand calculation for the default engine (95.5 × 88.4 mm, 6 cyl) on a standard day, full throttle:
-    //   air  = 0.9 × 1.2250 kg/m³ × 0.0037993 m³ = 0.0041887 kg = 4.1887 g
-    //   fuel = air / 14.7                         = 0.28495 g
-    //   work = fuel (kg) × 44,000,000 J/kg × 0.36 = 4,513.6 J
-    //   torque = work / (4 × Math.PI)             = 359.18 Nm
-    private const double FullThrottleAirG = 4.1887;
-    private const double FullThrottleTorqueNm = 359.18;
-
-    // ---- Torque ----
-
-    [Fact]
-    public void AirPerCycle_FullThrottle_MatchesHandCalculation()
-    {
-        var engine = NewEngine();
-        engine.ThrottlePosition = 1;
-
-        Assert.Equal(FullThrottleAirG, engine.AirMassPerCycleG, 1e-3);
-    }
-
-    [Fact]
-    public void Torque_FullThrottleStandardDay_MatchesHandCalculation()
-    {
-        var engine = RunningEngine(throttle: 1);
-
-        engine.Update(Dt, sparkOn: true, idleThrottleOpening: 0, StoichFuel(engine));
-
-        Assert.Equal(FullThrottleTorqueNm, engine.EngineTorqueNm, 0.01);
-        Assert.Equal(FullThrottleTorqueNm, engine.MaxIndicatedTorqueNm, 0.01);
-    }
-
-    [Fact]
-    public void PeakTorque_AtTheCrank_IsIndicatedMinusFriction()
-    {
-        var engine = NewEngine();
-
-        // 359.18 Nm from combustion − 78.55 Nm friction at the 4,400 RPM peak-torque speed (2.60 bar FMEP) = 280.6 Nm at the crank
-        Assert.Equal(FullThrottleTorqueNm - engine.FrictionTorqueNm(Engine.PeakTorqueRpm), engine.MaxBrakeTorqueNm, 0.01);
-        Assert.Equal(280.6, engine.MaxBrakeTorqueNm, 0.1);
-    }
-
-    [Fact]
-    public void Torque_ThinAir_IsAbout18PercentLess()
-    {
-        // 83 kPa is roughly Denver. Density, and so torque, scales with pressure: 83 / 101.325 = 0.819
-        var thinAir = new AmbientConditions { AirPressureKpa = 83 };
-        var engine = new Engine(95.5, 88.4, 144.2, 10.3, 6, thinAir, Fuel);
-
-        Assert.Equal(FullThrottleTorqueNm * 83 / 101.325, engine.MaxIndicatedTorqueNm, 0.01); // ~294.2 Nm
-    }
-
-    [Fact]
-    public void RichMix_UsesMoreFuelButMakesTheSameTorque()
-    {
-        var stoich = RunningEngine(throttle: 1);
-        var rich = RunningEngine(throttle: 1);
-        stoich.Update(Dt, sparkOn: true, idleThrottleOpening: 0, StoichFuel(stoich)); // get both cranks turning
-        rich.Update(Dt, sparkOn: true, idleThrottleOpening: 0, StoichFuel(rich));
-
-        stoich.Update(Dt, sparkOn: true, idleThrottleOpening: 0, stoich.AirMassPerCycleG / 14.7);
-        rich.Update(Dt, sparkOn: true, idleThrottleOpening: 0, rich.AirMassPerCycleG / 12.5);
-
-        // The extra fuel has no air to burn with, so it adds no torque, but it's still used up
-        Assert.Equal(stoich.EngineTorqueNm, rich.EngineTorqueNm, 1e-9);
-        Assert.True(rich.FuelBurnedG > stoich.FuelBurnedG);
-    }
-
-    // ---- Fuel used ----
-
-    [Fact]
-    public void FuelUsed_OneMinuteAt3000Rpm_MatchesHandCalculation()
-    {
-        // 3,000 RPM = 25 cycles/s. 0.28495 g × 25 × 60 s = 427.4 g = 0.4274 kg = 0.574 L
-        double fuelPerCycleG = FullThrottleAirG / 14.7;
-
-        double grams = Engine.FuelUsedG(fuelPerCycleG, rpm: 3000, dt: 60);
-
-        Assert.Equal(0.574, grams / 1000 / Fuel.DensityKgPerL, 0.001);
-    }
-
-    [Fact]
-    public void FuelUsed_ManySmallTicks_AddUpToOneBigOne()
-    {
-        double fuelPerCycleG = FullThrottleAirG / 14.7;
-        double total = 0;
-        for (int i = 0; i < 1200; i++) // 60 s of 0.05 s ticks
-            total += Engine.FuelUsedG(fuelPerCycleG, rpm: 3000, Dt);
-
-        Assert.Equal(Engine.FuelUsedG(fuelPerCycleG, rpm: 3000, dt: 60), total, 1e-6);
-    }
-
-    [Fact]
-    public void Update_FuelBurned_UsesTheRpmAtTheStartOfTheTick()
-    {
-        var engine = RunningEngine(throttle: 1);
-        engine.Update(Dt, sparkOn: true, idleThrottleOpening: 0, StoichFuel(engine)); // get the crank turning
-        double rpm = engine.EngineSpeed;
-        double fuelPerCycleG = StoichFuel(engine);
-
-        engine.Update(Dt, sparkOn: true, idleThrottleOpening: 0, fuelPerCycleG);
-
-        Assert.Equal(Engine.FuelUsedG(fuelPerCycleG, rpm, Dt), engine.FuelBurnedG, 1e-9);
-    }
-
-    // Whether to inject is the ECU's decision (see EngineControlUnitTests: Fuel_CutWith...).
-    // The engine uses whatever it's given, so a stopped crank uses nothing even if fuel is sent.
     [Fact]
     public void EngineOff_MakesNoTorqueAndUsesNoFuel()
     {
-        var engine = NewEngine(); // never started
+        // Spark is set, but the crank never turns, so no cylinder ever traps air or gets fuel
+        var engine = NewEngine();
         engine.ThrottlePosition = 1;
+        engine.SparkAdvanceDeg = 20;
 
-        engine.Update(Dt, sparkOn: true, idleThrottleOpening: 0, StoichFuel(engine));
+        engine.Update(Dt, idleThrottleOpening: 0);
 
         Assert.Equal(0, engine.FuelBurnedG);
         Assert.Equal(0, engine.EngineTorqueNm);
     }
 
-    // ---- The whole car: ECU decides fuel from the MAF reading, Vehicle drains the tank ----
+    // ---- The whole car: the engine fuels each cylinder for the air it traps, Vehicle drains the tank ----
 
     [Fact]
     public void Vehicle_Running_DrainsTheTank()
@@ -156,17 +55,6 @@ public class AirMathTests
     // ---- Helpers ----
 
     private static Engine NewEngine() => new(95.5, 88.4, 144.2, 10.3, 6, new AmbientConditions(), Fuel);
-
-    private static Engine RunningEngine(double throttle)
-    {
-        var engine = NewEngine();
-        engine.StartEngine();
-        engine.ThrottlePosition = throttle;
-        return engine;
-    }
-
-    // The fuel the ECU would ask for: the engine's air at the stoichiometric ratio
-    private static double StoichFuel(Engine engine) => engine.AirMassPerCycleG / Fuel.StoichiometricAfr;
 
     // Battery on, start key held for the crank, then released
     private static Vehicle StartedVehicle()
