@@ -130,7 +130,10 @@ public class Engine
     private double? _heldRpm;
 
     // Advance the engine by dt seconds. idleThrottleOpening and fuelPerCycleG are what the ECU decided this tick.
-    public void Update(double dt, bool sparkOn, double idleThrottleOpening, double fuelPerCycleG)
+    // loadTorqueNm and extraInertiaKgM2 come from the drivetrain (#38): what the vehicle feels like at the crank.
+    // Both 0 when nothing's connected (neutral or clutch in), so existing callers can leave them out.
+    public void Update(double dt, bool sparkOn, double idleThrottleOpening, double fuelPerCycleG,
+        double loadTorqueNm = 0, double extraInertiaKgM2 = 0)
     {
         bool combusting = IsRunning && sparkOn;
         ThrottlePlateOpening = Math.Clamp(ThrottlePosition + idleThrottleOpening, 0, 1);
@@ -155,7 +158,7 @@ public class Engine
         NetTorque = EngineTorqueNm - friction - pumpingTorqueNm;
 
         // 2. Rotational version of F = ma: angular acceleration = torque / inertia (rad/s²)
-        double angularAcceleration = NetTorque / Inertia;
+        double angularAcceleration = (NetTorque - loadTorqueNm) / (Inertia + extraInertiaKgM2);
 
         // 3. Convert rad/s² to RPM per second, then scale by the time step
         EngineSpeed += angularAcceleration * 60 / (2 * Math.PI) * dt;
