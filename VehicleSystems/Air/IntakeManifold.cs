@@ -52,8 +52,24 @@ public class IntakeManifold
 
         for (int i = 0; i < subSteps; i++)
         {
-            SubStep(_subStepSeconds, rpm, pedal);
+            // Mean-value mode: the engine's pull is worked out from rpm and the plenum pressure being tried
+            SubStep(_subStepSeconds, pedal, plenumPa => EngineFlowAtKgPerS(plenumPa, rpm));
         }
+    }
+
+    // Crank-angle mode (#28): advance the plenum by one crank step, emptied by a real cylinder instead of the
+    // mean-value guess. Call it right after cylinder.Step(stepDeg), once per crank step.
+    //   seconds:              how long that crank step took: CrankHelper.StepSeconds(stepDeg, rpm)
+    //   pedal:                plate opening, 0 = shut, 1 = wide open (pedal + ECU idle opening)
+    //   cylinderInflowKgPerS: cylinder.IntakeFlowKgPerS. Positive = air leaving the plenum into the cylinder,
+    //                         negative = the cylinder blowing gas back into the plenum
+    // A crank step is only 0.03–0.2 ms, so this is one SubStep, not a 1 ms loop like Update.
+    public void Step(double seconds, double pedal, double cylinderInflowKgPerS)
+    {
+        // The cylinder's flow stays the same for the whole step, whatever plenum pressure the bisection tries
+        // (_ => means "take the pressure, don't use it"). The bisection still finds one answer: throttle flow in
+        // drops as plenum pressure rises. SubStep sets PressurePa, ThrottleFlowKgPerS and EngineFlowKgPerS.
+        SubStep(seconds, pedal, _ => cylinderInflowKgPerS);
     }
 
     // One small step, solved "implicitly": find the new plenum pressure where
@@ -65,19 +81,23 @@ public class IntakeManifold
     // How: the left side minus the right side only ever rises as newPressurePa rises (more pressure = less air in through
     // the throttle and more air pulled out by the engine), so there's exactly one answer. Bisection finds it:
     // start with a range that must contain it, test the middle, keep the half the answer is in, repeat.
-    private void SubStep(double seconds, double rpm, double pedal)
+    //
+    // engineFlowAtKgPerS: takes a plenum pressure (Pa), returns the kg/s leaving the plenum into the engine at that pressure.
+    // Passed as a function so the same solver works for the mean-value guess (Update) and a real cylinder (Step).
+    private void SubStep(double seconds, double pedal, Func<double, double> engineFlowAtKgPerS)
     {
         double outsidePressurePa = _ambientConditions.AirPressureKpa * 1000;
         double throttleAreaM2 = ThrottleAreaM2(pedal);
 
-        // The answer is somewhere between (almost) vacuum and the higher of the old pressure and outside pressure
+        // The answer is somewhere between (almost) vacuum and twice the higher of the old pressure and outside pressure.
+        // It can end up above both: a cylinder blowing gas back through its intake valve pushes the plenum over outside pressure.
         double lowPa = 1;
-        double highPa = Math.Max(PressurePa, outsidePressurePa);
+        double highPa = 2 * Math.Max(PressurePa, outsidePressurePa);
 
         for (int i = 0; i < 60; i++)
         {
             double middlePa = (lowPa + highPa) / 2;
-            double mismatchPa = middlePa - PressurePa - seconds * PressureChangePaPerS(middlePa, throttleAreaM2, rpm);
+            double mismatchPa = middlePa - PressurePa - seconds * PressureChangePaPerS(middlePa, throttleAreaM2, engineFlowAtKgPerS);
 
             if (mismatchPa > 0)
                 highPa = middlePa;  // guessed too high
@@ -87,15 +107,15 @@ public class IntakeManifold
 
         PressurePa = (lowPa + highPa) / 2;
         ThrottleFlowKgPerS = ThrottleFlowAtKgPerS(PressurePa, throttleAreaM2);
-        EngineFlowKgPerS = EngineFlowAtKgPerS(PressurePa, rpm);
+        EngineFlowKgPerS = engineFlowAtKgPerS(PressurePa);
     }
 
     // How fast the plenum pressure would be changing (Pa/s) if it were at plenumPressurePa:
     //   gasConstant × outsideTempK / plenumVolumeM3 × (throttle flow in − engine flow out)
     // In words: more air in than out raises the pressure, and the smaller the plenum the faster it rises
-    private double PressureChangePaPerS(double plenumPressurePa, double throttleAreaM2, double rpm)
+    private double PressureChangePaPerS(double plenumPressurePa, double throttleAreaM2, Func<double, double> engineFlowAtKgPerS)
     {
-        double netInflowKgPerS = ThrottleFlowAtKgPerS(plenumPressurePa, throttleAreaM2) - EngineFlowAtKgPerS(plenumPressurePa, rpm);
+        double netInflowKgPerS = ThrottleFlowAtKgPerS(plenumPressurePa, throttleAreaM2) - engineFlowAtKgPerS(plenumPressurePa);
         return GasProperties.Air.GasConstantJPerKgK * _ambientConditions.AirTempK / PlenumVolumeM3 * netInflowKgPerS;
     }
 

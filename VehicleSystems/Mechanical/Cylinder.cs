@@ -38,6 +38,7 @@ public class Cylinder
 
     // Spark advance in degrees before firing TDC. null = spark off: no fuel and no burn.
     public double? SparkAdvanceDeg { get; set; }
+    public double IntakeFlowKgPerS { get; private set; }   // air in through the intake valve this step: + = into the cylinder, − = blowing back into the plenum
 
     // Gas that backflows from the exhaust comes in at the average temperature of what last went out
     private double _exhaustPortTempK = 900;
@@ -73,6 +74,7 @@ public class Cylinder
     // Turn the crank by stepDeg degrees, updating temperature and work (RK4), then heat and valve flow
     public void Step(double stepDeg)
     {
+        IntakeFlowKgPerS = 0;
         double h = DegreeHelper.ToRadians(stepDeg);
         double startAngleDeg = CrankAngleDeg;
         double t = TempK;
@@ -187,6 +189,9 @@ public class Cylinder
         // Side A = the port, side B = the cylinder, so positive = into the cylinder
         double intakeKg = GasHelper.MassFlowKgPerS(_valvetrain!.Intake.FlowAreaM2(startAngleDeg),
             IntakePressurePa, IntakeTempK, cylinderPressurePa, cylinderTempK, _gasProperties, Valvetrain.DischargeCoefficient) * stepSeconds;
+
+        IntakeFlowKgPerS = intakeKg / stepSeconds;
+
         double exhaustKg = GasHelper.MassFlowKgPerS(_valvetrain.Exhaust.FlowAreaM2(startAngleDeg),
             ExhaustPressurePa, _exhaustPortTempK, cylinderPressurePa, cylinderTempK, _gasProperties, Valvetrain.DischargeCoefficient) * stepSeconds;
 
