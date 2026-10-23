@@ -30,11 +30,13 @@ Run it in a real terminal (the VS Code terminal, PowerShell or Command Prompt). 
 The sim prints the engine's specs, then a live dash that updates 20 times a second:
 
 ```
-throttle= 25%  rpm= 2410  torque= 118 Nm
+throttle= 25%  rpm= 2410  torque= 118 Nm  sim=  2.4x
 fuel= 79.214 L  maf= 18.42 g/s  map= 6.67 psi
 speed=  62 km/h ( 39 mph)  gear=3  clutch=locked    brake=  0%  grade= +2%
 bat= 12.6 V  Engine running
 ```
+
+`sim` is how fast the simulation ran compared with real time on the last tick: under `1.0x` means it's running slower than real life (most likely at high RPM).
 
 Clutch shows `in` (pedal down), `slipping` or `locked`. Gear shows `N` or `1`–`9`. A refused shift shows "press clutch to shift" after the engine status.
 
@@ -69,13 +71,16 @@ max RPM = 30 × piston speed limit / stroke (m)
 
 The result is rounded down to the nearest 100 RPM. For the Frontier engine this gives 6,700 RPM.
 
-**Torque.** Calculated from brake mean effective pressure (BMEP), the average pressure pushing on the pistons over a cycle:
+**Torque.** Worked out crank degree by crank degree (the crank-angle model). Every cylinder is its own gas model: it breathes from the intake manifold through its valves, is fuelled for the air it actually traps, burns, and loses heat to the walls. Each half degree, every cylinder's push on its piston is turned into torque on the crank:
 
 ```
-torque = BMEP × displacement / 4π
+cylinderTorqueNm = (cylinderPressurePa − crankcasePressurePa) × pistonAreaM2 × leverArmM
+netTorqueNm      = sum of every cylinder's torque − frictionTorqueNm
 ```
 
-With BMEP at 12.5 bar this gives about 378 Nm for the Frontier engine, against Nissan's rated 381 Nm.
+The cylinders fire evenly, every `720 / cylinderCount` crank degrees (180° for a four, 120° for a six, 90° for a V8), so any cylinder count works. The dash shows torque averaged over each 0.05 s tick.
+
+At full throttle the model currently makes about 44% more torque than a real engine (about 517 Nm at 4,400 RPM, against roughly 360 Nm indicated), because the burned gas is treated as plain air. The dyno ticket (#30) calibrates it.
 
 **Friction.** The engine loses more to friction the faster it spins: bearings and piston rings, oil churning, the valvetrain. Friction is worked out as a friction mean effective pressure (FMEP) that rises with RPM, using Heywood's figures for spark-ignition engines (`rpmK` = RPM in thousands):
 
@@ -94,9 +99,9 @@ frictionTorqueNm = fmepBar × 100,000 × displacementM3 / (4 × Math.PI)
 | 3,000 | 1.87 bar | 57 Nm |
 | 6,700 | 4.22 bar | 128 Nm |
 
-Friction only applies while the crank is turning. Because it rises with RPM (and the throttle's air supply doesn't), an engine left at a fixed part throttle settles at a steady speed instead of racing to the limiter: about 3,150 RPM at 10% throttle and 5,350 RPM at 20%. The coefficients are constants at the top of `Engine.cs`.
+Friction only applies while the crank is turning. Because it rises with RPM (and the throttle's air supply doesn't), an engine left at a fixed part throttle should settle at a steady speed instead of racing to the limiter. Until #30 brings the torque down, it settles close to the limiter (about 6,200 RPM at 10% throttle). The coefficients are constants at the top of `Engine.cs`.
 
-**RPM.** RPM comes from net torque: engine torque minus friction and pumping loss, divided by the crank's inertia. Nothing sets RPM directly. It rises when the engine makes more torque than it loses, and falls when it makes less. Redline is a hard ceiling.
+**RPM.** RPM comes from net torque: the cylinders' torque minus friction, divided by the crank's inertia, every half degree. Pumping loss is already in the cylinder pressures. The starter holds the crank at 200 RPM while it's engaged, so the cylinders can fill and fire before it lets go. Nothing sets RPM directly. It rises when the engine makes more torque than it loses, and falls when it makes less. Redline is a hard ceiling.
 
 **Idle.** The throttle is drive-by-wire: the pedal is only a request, and the ECU decides where the throttle plate actually sits. With your foot off, a little air still leaks past the closed plate (10 mm²), but not enough to idle. The ECU holds the plate slightly open on top of the pedal, about 1.5% at sea level, and adjusts it every tick to keep about 700 RPM:
 
@@ -122,7 +127,7 @@ idleThrottleOpening = 0.015 + 0.000016 × rpmErrorRpm + 0.00002 × (rpmErrorRpm 
 | File | Contents |
 | --- | --- |
 | `Program.cs` | Builds the engine, prints its specs and runs the keyboard-driven update loop |
-| `Engine.cs` | Engine specs, displacement, redline, torque, throttle and the RPM update |
+| `Engine.cs` | Engine specs, displacement, redline, the cylinders, throttle and the crank-angle update |
 | `AmbientConditions.cs` | Air pressure, temperature and density |
 | `FuelSystem.cs` | Fuel tank capacity and level (placeholder) |
 
@@ -130,9 +135,9 @@ Tuning values such as rev rates, the piston speed limit, idle variation and BMEP
 
 ## Current limitations
 
-- RPM follows the throttle directly. Torque is calculated but doesn't drive RPM yet.
-- The engine accepts `AmbientConditions`, but air density doesn't affect it yet.
-- The fuel system holds a tank size and level but doesn't drain.
+- Full-throttle torque is about 44% high until the dyno ticket (#30) calibrates it (burned gas is treated as air).
+- At high RPM the crank-angle model can run slower than real time (the dash's `sim` figure).
+- Below 150 RPM the crank counts as stopped, because a half-degree step gets too long for the valve flow to stay stable.
 - Cooling, lubrication, exhaust and the air filter are assumed to always work.
 
 ## Roadmap

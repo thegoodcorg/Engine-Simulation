@@ -10,6 +10,7 @@ public class CombustionTests
     private const double FiringTdcDeg = 720;
     private const double StartPressurePa = 101_325;
     private const double StartTemperatureK = 288.15;
+    private const double Rpm = 3000;               // no heat transfer in these tests, so the speed doesn't change the result
 
     private static readonly CylinderGeometry Geometry = new(95.5, 88.4, 144.2, 10.3);
     private static readonly FuelProperties Fuel = FuelProperties.PumpGas;
@@ -76,7 +77,7 @@ public class CombustionTests
         // Spark off = no Combustion: the cylinder just compresses and expands like #24
         var cylinder = new Cylinder(Geometry, GasProperties.Air, BdcDeg, StartPressurePa, StartTemperatureK);
 
-        double workJ = cylinder.RunCycle(Engine.CrankStepDeg);
+        double workJ = cylinder.RunCycle(Engine.CrankStepDeg, Rpm);
 
         Assert.Equal(0, cylinder.HeatReleasedJ);
         Assert.True(Math.Abs(workJ) < 0.01, $"net work was {workJ} J");
@@ -88,7 +89,7 @@ public class CombustionTests
         // All the fuel burns in 1° right at TDC, the ideal Otto cycle
         var cylinder = CylinderWith(new Combustion(FiringTdcDeg, 1, StoichHeatJ()));
 
-        double efficiency = cylinder.RunCycle(Engine.CrankStepDeg) / cylinder.HeatReleasedJ;
+        double efficiency = cylinder.RunCycle(Engine.CrankStepDeg, Rpm) / cylinder.HeatReleasedJ;
 
         Assert.Equal(1, efficiency / OttoEfficiency, 0.01); // within 1% of ~60.7%
     }
@@ -99,8 +100,8 @@ public class CombustionTests
         var instant = CylinderWith(new Combustion(FiringTdcDeg, 1, StoichHeatJ()));
         var normal = CylinderWith(Combustion.FromSpark(20, StoichFuelG(), Fuel));
 
-        double instantEfficiency = instant.RunCycle(Engine.CrankStepDeg) / instant.HeatReleasedJ;
-        double normalEfficiency = normal.RunCycle(Engine.CrankStepDeg) / normal.HeatReleasedJ;
+        double instantEfficiency = instant.RunCycle(Engine.CrankStepDeg, Rpm) / instant.HeatReleasedJ;
+        double normalEfficiency = normal.RunCycle(Engine.CrankStepDeg, Rpm) / normal.HeatReleasedJ;
 
         Assert.True(normalEfficiency < instantEfficiency); // ~58.9% vs ~60.7%
     }
@@ -125,7 +126,7 @@ public class CombustionTests
         var cylinder = CylinderWith(Combustion.FromSpark(20, StoichFuelG(), Fuel));
         double startEnergyJ = cylinder.InternalEnergyJ;
 
-        double workJ = cylinder.RunCycle(Engine.CrankStepDeg);
+        double workJ = cylinder.RunCycle(Engine.CrankStepDeg, Rpm);
         double energyChangeJ = cylinder.InternalEnergyJ - startEnergyJ;
 
         // First law: the heat put in either did work on the piston or is still in the gas
@@ -153,6 +154,6 @@ public class CombustionTests
     private static double WorkWithSpark(double sparkAdvanceDeg)
     {
         var cylinder = CylinderWith(Combustion.FromSpark(sparkAdvanceDeg, StoichFuelG(), Fuel));
-        return cylinder.RunCycle(Engine.CrankStepDeg);
+        return cylinder.RunCycle(Engine.CrankStepDeg, Rpm);
     }
 }

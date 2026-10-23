@@ -1,11 +1,6 @@
-namespace EngineSim.VehicleSystems.Driveline;
+using EngineSim.Enums;
 
-public enum ClutchState
-{
-    Disengaged, // engine and wheels move independently
-    Slipping,   // the plates rub: torque passes, but the two sides turn at different speeds
-    Locked,     // the two sides turn together as one
-}
+namespace EngineSim.VehicleSystems.Driveline;
 
 // The clutch (#38): how much torque can pass between the engine and the gearbox, and whether it's slipping.
 public class Clutch

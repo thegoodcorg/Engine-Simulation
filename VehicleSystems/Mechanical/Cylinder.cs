@@ -1,3 +1,4 @@
+using System.Diagnostics.Contracts;
 using EngineSim.Helpers;
 
 namespace EngineSim.VehicleSystems.Mechanical;
@@ -24,7 +25,6 @@ public class Cylinder
     public double WorkJ { get; private set; }
     public double HeatReleasedJ { get; private set; }
     public double HeatLostJ { get; private set; }   // heat lost to the walls so far
-    public double Rpm { get; set; }                 // crank speed, set from outside: heat loss and valve flow depend on how long each step takes
     public double InternalEnergyJ => GasMassKg * _gasProperties.CvJPerKgK * TempK;
     public double VolumeM3 => VolumeHelper.CcToCubicMeters(_cylinderGeometry.Volume(CrankAngleDeg));
     public double PressurePa => GasMassKg * _gasProperties.GasConstantJPerKgK * TempK / VolumeM3;
@@ -39,6 +39,8 @@ public class Cylinder
     // Spark advance in degrees before firing TDC. null = spark off: no fuel and no burn.
     public double? SparkAdvanceDeg { get; set; }
     public double IntakeFlowKgPerS { get; private set; }   // air in through the intake valve this step: + = into the cylinder, − = blowing back into the plenum
+    public double FuelInjectedG { get; private set; }
+
 
     // Gas that backflows from the exhaust comes in at the average temperature of what last went out
     private double _exhaustPortTempK = 900;
@@ -72,7 +74,7 @@ public class Cylinder
     }
 
     // Turn the crank by stepDeg degrees, updating temperature and work (RK4), then heat and valve flow
-    public void Step(double stepDeg)
+    public void Step(double stepDeg, double rpm)
     {
         IntakeFlowKgPerS = 0;
         double h = DegreeHelper.ToRadians(stepDeg);
@@ -100,34 +102,34 @@ public class Cylinder
         // Heat leaking into the walls during this step cools the gas: temperature drop = heat / (gas mass × cv)
         if (_heatTransfer != null)
         {
-            if (Rpm <= 0)
+            if (rpm <= 0)
                 throw new InvalidOperationException("Set Rpm before stepping a cylinder with heat transfer: heat loss depends on how long each step takes.");
 
             // Woschni's combustion turbulence only counts while burning and expanding with both valves shut
             bool afterSpark = _combustion != null && startAngleDeg >= _combustion.BurnStartDeg && ValvesShut(startAngleDeg);
-            double heatLossJ = _heatTransfer.HeatLossJ(startAngleDeg, startPressure, t, Rpm, stepDeg, afterSpark);
+            double heatLossJ = _heatTransfer.HeatLossJ(startAngleDeg, startPressure, t, rpm, stepDeg, afterSpark);
             TempK -= heatLossJ / (GasMassKg * _gasProperties.CvJPerKgK);
             HeatLostJ += heatLossJ;
         }
 
         if (_valvetrain != null)
         {
-            FlowThroughValves(startAngleDeg, stepDeg);
+            FlowThroughValves(startAngleDeg, stepDeg, rpm);
             CheckValveEvents(startAngleDeg, CrankAngleDeg);
         }
     }
 
     // Run one sealed cycle from here (expects BDC, 540°) through firing TDC and back to BDC. Returns indicated work (J).
-    public double RunCycle(double stepDeg)
+    public double RunCycle(double stepDeg, double rpm)
     {
         int steps = (int)Math.Round(360 / stepDeg);
         for (int i = 0; i < steps; i++)
-            Step(stepDeg);
+            Step(stepDeg, rpm);
         return WorkJ;
     }
 
     // Open mode: run one full 720° cycle from here and return its numbers
-    public CycleResult RunOpenCycle(double stepDeg)
+    public CycleResult RunOpenCycle(double stepDeg, double rpm)
     {
         if (_valvetrain == null)
             throw new InvalidOperationException("RunOpenCycle needs a Valvetrain. Use RunCycle for a sealed cylinder.");
@@ -140,7 +142,7 @@ public class Cylinder
 
         int steps = (int)Math.Round(CycleDeg / stepDeg);
         for (int i = 0; i < steps; i++)
-            Step(stepDeg);
+            Step(stepDeg, rpm);
 
         // Next cycle's exhaust backflow comes in at the average temperature of what went out this cycle
         if (_exhaustOutG > 0)
@@ -162,12 +164,12 @@ public class Cylinder
     }
 
     // Open mode: repeat cycles until indicated work and trapped mass each change by under 0.5% from one cycle to the next
-    public CycleResult RunUntilSettled(double stepDeg, int maxCycles = 20)
+    public CycleResult RunUntilSettled(double stepDeg, double rpm, int maxCycles = 20)
     {
-        CycleResult previous = RunOpenCycle(stepDeg);
+        CycleResult previous = RunOpenCycle(stepDeg, rpm);
         for (int i = 1; i < maxCycles; i++)
         {
-            CycleResult current = RunOpenCycle(stepDeg);
+            CycleResult current = RunOpenCycle(stepDeg, rpm);
             if (ChangedUnderHalfAPercent(previous.IndicatedWorkJ, current.IndicatedWorkJ)
                 && ChangedUnderHalfAPercent(previous.TrappedMassG, current.TrappedMassG))
                 return current;
@@ -176,13 +178,19 @@ public class Cylinder
         return previous;
     }
 
+    public double TorqueNm(double crankCasePressurePa)
+    {
+        return (PressurePa - crankCasePressurePa) * (_cylinderGeometry.PistonAreaMm2 / 1000000) * (_cylinderGeometry.LeverArm(CrankAngleDeg) / 1000);
+    }
+
+
     private static bool ChangedUnderHalfAPercent(double before, double after) =>
         Math.Abs(after - before) <= 0.005 * Math.Max(Math.Abs(after), 1e-9);
 
     // Gas through both valves during this step. Both flows are worked out from the same cylinder state, then applied together.
-    private void FlowThroughValves(double startAngleDeg, double stepDeg)
+    private void FlowThroughValves(double startAngleDeg, double stepDeg, double rpm)
     {
-        double stepSeconds = CrankHelper.StepSeconds(stepDeg, Rpm);
+        double stepSeconds = CrankHelper.StepSeconds(stepDeg, rpm);
         double cylinderPressurePa = PressurePa;
         double cylinderTempK = TempK;
 
@@ -231,6 +239,8 @@ public class Cylinder
                 double freshAirG = Math.Max(_trappedMassG - _residualMassG, 0);
                 double fuelG = freshAirG / _fuel.StoichiometricAfr;
 
+                FuelInjectedG += fuelG;
+
                 // This cycle's firing TDC is the next multiple of 720° after IVC. FromSpark assumes 720°, so shift the burn to this cycle.
                 double firingTdcDeg = Math.Ceiling(toDeg / CycleDeg) * CycleDeg;
                 Combustion burn = Combustion.FromSpark(advanceDeg, fuelG, _fuel);
@@ -239,11 +249,13 @@ public class Cylinder
         }
     }
 
-    // Did the crank pass eventDeg (in any cycle) on the way from fromDeg to toDeg?
+    // Did the crank pass eventDeg (in any cycle) on the way from fromDeg to toDeg? Counts an event just after fromDeg,
+    // up to and including toDeg. A step that starts exactly on the event doesn't count it: the step before, which ended
+    // there, already did. (Counting both made every IVC on the half-degree grid inject fuel twice.)
     private static bool Crossed(double fromDeg, double toDeg, double eventDeg)
     {
         double sinceEventDeg = ((fromDeg - eventDeg) % CycleDeg + CycleDeg) % CycleDeg; // how far past the event we were at the start
-        return sinceEventDeg == 0 || sinceEventDeg + (toDeg - fromDeg) >= CycleDeg;
+        return sinceEventDeg > 0 && sinceEventDeg + (toDeg - fromDeg) >= CycleDeg;
     }
 
     private bool ValvesShut(double crankAngleDeg) =>
@@ -263,4 +275,6 @@ public class Cylinder
 
         return (tempChangePerRad, workPerRad);
     }
+
+
 }

@@ -191,14 +191,14 @@ public class IntakeManifoldTests
     }
 
     [Fact]
-    public void PartThrottle_GivesLessAirPerCycleThanFullThrottle()
+    public void PartThrottle_GivesLessAirThanFullThrottle()
     {
         var part = RunningEngineHeldAt(3000, throttle: 0.1);
         var full = RunningEngineHeldAt(3000, throttle: 1);
 
+        // At a fixed RPM, less air in the plenum means less air through the throttle (MAF)
         Assert.True(part.ManifoldPressureKpa < full.ManifoldPressureKpa);
-        Assert.True(part.AirMassPerCycleG < full.AirMassPerCycleG);
-        Assert.Equal(part.MafGPerS / full.MafGPerS, part.AirMassPerCycleG / full.AirMassPerCycleG, 0.01); // at a fixed RPM, MAF follows air per cycle
+        Assert.True(part.MafGPerS < full.MafGPerS);
     }
 
     // ---- Helpers ----
@@ -231,7 +231,7 @@ public class IntakeManifoldTests
         engine.HeldRpm = rpm;
 
         for (int i = 0; i < 40; i++)
-            engine.Update(Tick, sparkOn: false, idleThrottleOpening: 0, fuelPerCycleG: 0);
+            engine.Update(Tick, idleThrottleOpening: 0);
 
         return engine;
     }

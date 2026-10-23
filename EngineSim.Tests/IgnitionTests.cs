@@ -32,14 +32,21 @@ public class IgnitionTests
         var engine = new Engine(95.5, 88.4, 144.2, 10.3, 6, new AmbientConditions(), FuelProperties.PumpGas);
         engine.StartEngine();
         engine.ThrottlePosition = 1;
-        double fuelPerCycleG = engine.AirMassPerCycleG / FuelProperties.PumpGas.StoichiometricAfr;
+        engine.SparkAdvanceDeg = 20;
+        engine.HeldRpm = 3000; // get it running at speed, like on a dyno, then let it go
         for (int i = 0; i < 10; i++)
-            engine.Update(Dt, sparkOn: true, idleThrottleOpening: 0, fuelPerCycleG); // get some speed up
+            engine.Update(Dt, idleThrottleOpening: 0);
+        engine.HeldRpm = null;
+
+        // Spark off. A cylinder that trapped its charge before the cut still burns it, so give it two ticks to clear
+        engine.SparkAdvanceDeg = null;
+        engine.Update(Dt, idleThrottleOpening: 0);
         double rpmBefore = engine.EngineSpeed;
+        engine.Update(Dt, idleThrottleOpening: 0);
 
-        engine.Update(Dt, sparkOn: false, idleThrottleOpening: 0, fuelPerCycleG);
-
-        Assert.Equal(0, engine.EngineTorqueNm);
+        // Nothing burning: the gas gives back about what it took (~0 Nm at full throttle), against hundreds with spark on
+        Assert.InRange(engine.EngineTorqueNm, -50, 5);
+        Assert.Equal(0, engine.FuelBurnedG);
         Assert.True(engine.EngineSpeed < rpmBefore);
     }
 
