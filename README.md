@@ -16,13 +16,38 @@ Run it in a real terminal (the VS Code terminal, PowerShell or Command Prompt). 
 
 | Key | Action |
 | --- | --- |
-| W | Throttle up 1% |
-| S | Throttle down 1% |
-| 1 | Connect/Disconnect Battery |
-| 3 | Start engine |
+| 1 | Battery on/off |
+| Hold 3 | Start the engine (hold for half a second while it cranks) |
+| 4 | Stop the engine |
+| W / S | Throttle up / down 1% |
+| Hold Space | Clutch pedal down. Let go and the clutch engages over 0.6 s, so it slips for a moment |
+| Up / Down arrow | Shift up / down (clutch in only) |
+| N | Neutral (clutch in only) |
+| Hold B | Brake (builds to full over 0.3 s, off when you let go) |
+| PageUp / PageDown | Hill grade +1% / −1% (up to ±15%) |
 | Q or Esc | Quit |
 
-The sim prints the engine's specs, then shows a live line of throttle and RPM that updates 20 times a second.
+The sim prints the engine's specs, then a live dash that updates 20 times a second:
+
+```
+throttle= 25%  rpm= 2410  torque= 118 Nm
+fuel= 79.214 L  maf= 18.42 g/s  map= 6.67 psi
+speed=  62 km/h ( 39 mph)  gear=3  clutch=locked    brake=  0%  grade= +2%
+bat= 12.6 V  Engine running
+```
+
+Clutch shows `in` (pedal down), `slipping` or `locked`. Gear shows `N` or `1`–`9`. A refused shift shows "press clutch to shift" after the engine status.
+
+### How to drive it
+
+1. Press **1** to connect the battery, then hold **3** until the engine starts and settles at idle (~700 RPM).
+2. Hold **Space** (clutch in) and press **Up** to select 1st.
+3. Press **W** a few times for 15–20% throttle.
+4. Let go of **Space**. The clutch slips for a moment while the truck gets moving, then locks.
+5. To change gear: hold **Space**, press **Up**, let go of **Space**. Ease off the throttle first, or the engine will flare.
+
+Let go of Space at idle with no throttle and the engine stalls, like a real car. Press **N** with the clutch in to coast.
+
 
 ## How the engine is calculated
 

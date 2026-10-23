@@ -18,9 +18,25 @@ public class Vehicle
     private readonly VehicleBody _body;
     private readonly Drivetrain _drivetrain;
 
-    // Driver and road inputs (#37). The controls ticket sets these from the keyboard.
+    // Driver and road inputs (#37)
     public double BrakePedal { get; set; }      // 0 = off, 1 = full braking
     public double GradePercent { get; set; }    // hill steepness: 5 = climbing 5 m per 100 m, negative = downhill. 0 = flat
+
+    // Keyboard controls (#39). A key is only up or down, so the clutch and brake ramp over a short time instead of
+    // jumping: releasing the clutch slips it for a moment, which is what makes pulling away possible from a keyboard.
+    public const double ClutchEngageTimeS = 0.6;   // clutch pedal released: fully engaged after this long
+    public const double BrakeApplyTimeS = 0.3;     // brake key held: full pressure after this long
+    public const double MaxGradePercent = 15;      // steepest hill the grade keys allow, up or down
+
+    private bool _clutchPedalHeld;
+    private bool _brakeHeld;
+    // The ramps only take over once the keys are used, so code that sets ClutchEngagement or BrakePedal directly
+    // (tests, the dyno) isn't overridden every tick
+    private bool _clutchPedalInUse;
+    private bool _brakeKeyInUse;
+
+    // A short message for the driver, e.g. a refused shift. Cleared by the next shift that works.
+    public string? DriverMessage { get; private set; }
 
     // Drivetrain (#38)
     public double ClutchEngagement                // 0 = clutch pedal down, 1 = pedal fully out
@@ -32,7 +48,40 @@ public class Vehicle
     public ClutchState ClutchState => _drivetrain.Clutch.State;
 
     // Change gear. Refused (false) unless the clutch pedal is all the way down.
-    public bool ShiftTo(int gear) => _drivetrain.Gearbox.TryShift(gear, clutchDisengaged: ClutchEngagement == 0);
+    public bool ShiftTo(int gear)
+    {
+        bool shifted = _drivetrain.Gearbox.TryShift(gear, clutchDisengaged: ClutchEngagement == 0);
+        DriverMessage = shifted ? null : "press clutch to shift";
+        return shifted;
+    }
+
+    // Up one gear (neutral → 1st). Does nothing in top gear.
+    public bool ShiftUp() => Gear < Gearbox.TopGear && ShiftTo(Gear + 1);
+
+    // Down one gear. Does nothing in 1st or neutral: neutral is its own key.
+    public bool ShiftDown() => Gear > 1 && ShiftTo(Gear - 1);
+
+    public bool SelectNeutral() => ShiftTo(0);
+
+    // Clutch pedal: held = pedal down (clutch fully in straight away); released = engages over ClutchEngageTimeS
+    public void SetClutchPedalHeld(bool held)
+    {
+        _clutchPedalHeld = held;
+        _clutchPedalInUse = true;
+    }
+
+    // Brake key: held = pressure builds over BrakeApplyTimeS; released = off straight away
+    public void SetBrakeHeld(bool held)
+    {
+        _brakeHeld = held;
+        _brakeKeyInUse = true;
+    }
+
+    // Grade keys: steeper or shallower by this many percent, kept within ±MaxGradePercent
+    public void ChangeGrade(double deltaPercent)
+    {
+        GradePercent = Math.Clamp(GradePercent + deltaPercent, -MaxGradePercent, MaxGradePercent);
+    }
 
     private bool _startKeyHeld;         // set by Program.cs every tick
     private string? _diagnosticMessage; // latest ECU message: a refusal, stall reason or warning, or null
@@ -74,6 +123,7 @@ public class Vehicle
     // Road (#37)
     public double SpeedMs => _body.SpeedMs;
     public double SpeedKmh => _body.SpeedKmh;
+    public double SpeedMph => _body.SpeedMs * 2.23694;
     public double AccelerationMs2 => _body.AccelerationMs2;
 
     // Engine specs for the startup summary
@@ -88,6 +138,8 @@ public class Vehicle
 
     public void Update(double dt)
     {
+        UpdatePedals(dt);
+
         // 1 read the sensors, 2 let the ECU decide everything, 3 apply its decisions
         EcuOutputs ecu = _ecu.Update(dt, ReadSensors());
         _ignitionSystem.SetSpark(ecu.SparkOn);
@@ -185,6 +237,16 @@ public class Vehicle
         }
     }
 
+
+    // Clutch and brake ramps (#39), scaled by dt so they feel the same at any tick rate
+    private void UpdatePedals(double dt)
+    {
+        if (_clutchPedalInUse)
+            ClutchEngagement = _clutchPedalHeld ? 0 : Math.Min(1, ClutchEngagement + dt / ClutchEngageTimeS);
+
+        if (_brakeKeyInUse)
+            BrakePedal = _brakeHeld ? Math.Min(1, BrakePedal + dt / BrakeApplyTimeS) : 0;
+    }
 
     // Open (+) or close (-) the throttle by the given amount; the setter keeps it between 0 (released) and 1
     public void ThrottleControl(double amount)
